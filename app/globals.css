@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f6f5f1;
+  --bg-2: #efede6;
+  --ink: #0e1116;
+  --ink-soft: #3a414c;
+  --line: #e2dfd6;
+  --accent: #c9763d;
+  --accent-deep: #9b5526;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  padding: 0;
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle paper grain + warm vignette behind everything */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(201,118,61,0.10), transparent 60%),
+    radial-gradient(900px 500px at -5% 110%, rgba(63,111,91,0.08), transparent 55%);
+}
+
+h1, h2, h3, .display {
+  font-family: var(--font-display), Georgia, serif;
+  letter-spacing: -0.01em;
+}
+
+.mono { font-family: var(--font-mono), ui-monospace, monospace; }
+
+/* Thin top-bar progress shimmer used on the dashboard hero */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise { animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.rise-1 { animation-delay: 0.05s; }
+.rise-2 { animation-delay: 0.12s; }
+.rise-3 { animation-delay: 0.19s; }
+.rise-4 { animation-delay: 0.26s; }
+.rise-5 { animation-delay: 0.33s; }
+
+.card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(14,17,22,0.04), 0 8px 24px -16px rgba(14,17,22,0.12);
+}
+
+.hairline { border-color: var(--line); }
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: 0.92rem;
+}
+
+::selection { background: rgba(201,118,61,0.22); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #d8d4c8; border-radius: 8px; border: 3px solid var(--bg); }

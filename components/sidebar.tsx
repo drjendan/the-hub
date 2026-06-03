@@ -1,0 +1,84 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { ORG } from "@/lib/demo-data";
+
+const NAV = [
+  { href: "/", label: "Dashboard", glyph: "◈" },
+  { href: "/hub", label: "Agent Hub", glyph: "⬡" },
+  { href: "/intake/role", label: "Role Match", glyph: "⊹" },
+  { href: "/builder", label: "Builder", glyph: "✎" },
+  { href: "/sessions", label: "Sessions", glyph: "❖" },
+  { href: "/governance", label: "Governance", glyph: "§" },
+  { href: "/analytics", label: "Analytics", glyph: "▤" },
+];
+
+const SECONDARY = [
+  { href: "/intake/corporate", label: "Corporate intake" },
+];
+
+export function Sidebar() {
+  const path = usePathname();
+  const active = (href: string) =>
+    href === "/" ? path === "/" : path.startsWith(href);
+
+  return (
+    <aside className="hidden md:flex w-[248px] shrink-0 flex-col border-r hairline bg-[#fbfaf6]/80 backdrop-blur sticky top-0 h-screen">
+      <div className="px-5 pt-6 pb-5 border-b hairline">
+        <div className="flex items-center gap-2.5">
+          <div className="grid h-9 w-9 place-items-center rounded-xl bg-ink text-paper text-lg">⬡</div>
+          <div className="leading-tight">
+            <div className="display text-[15px] font-semibold">Agent Hub</div>
+            <div className="text-[11px] text-ink-soft tracking-wide">ENTERPRISE</div>
+          </div>
+        </div>
+      </div>
+
+      <nav className="flex-1 px-3 py-4 space-y-0.5">
+        {NAV.map((n) => (
+          <Link
+            key={n.href}
+            href={n.href}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] transition-colors ${
+              active(n.href)
+                ? "bg-ink text-paper"
+                : "text-ink-soft hover:bg-black/[0.04] hover:text-ink"
+            }`}
+          >
+            <span className={`w-4 text-center ${active(n.href) ? "text-accent-soft" : "text-accent"}`}>
+              {n.glyph}
+            </span>
+            {n.label}
+          </Link>
+        ))}
+
+        <div className="px-3 pt-5 pb-1 text-[10px] uppercase tracking-[0.14em] text-ink-soft/70">
+          Setup
+        </div>
+        {SECONDARY.map((n) => (
+          <Link
+            key={n.href}
+            href={n.href}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors ${
+              active(n.href) ? "text-ink font-medium" : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            {n.label}
+          </Link>
+        ))}
+      </nav>
+
+      <div className="border-t hairline p-3">
+        <div className="rounded-xl bg-white border hairline p-3">
+          <div className="text-[12px] font-semibold leading-tight">{ORG.name}</div>
+          <div className="text-[11px] text-ink-soft">{ORG.industry}</div>
+          <div className="mt-2 flex items-center gap-1.5">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-moss" />
+            <span className="text-[11px] text-ink-soft capitalize">{ORG.governance_mode} governance</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
