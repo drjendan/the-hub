@@ -119,6 +119,16 @@ export function Sidebar({
             {n.label}
           </Link>
         ))}
+        {currentOrg?.org_role === "owner" && (
+          <Link
+            href="/settings"
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors ${
+              active("/settings") ? "text-ink font-medium" : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            AI provider keys
+          </Link>
+        )}
         {isAdmin && (
           <Link
             href="/admin"

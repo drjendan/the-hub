@@ -85,6 +85,15 @@ export interface GovernanceRequest {
   resolved_at: string | null;
 }
 
+// Per-tenant BYO provider key — masked shape only (the encrypted key is never
+// exposed to the client; see lib/provider-keys.ts and supabase/provider_keys.sql).
+export interface OrgProviderKey {
+  provider: "openai" | "anthropic" | "google";
+  key_hint: string;
+  model: string | null;
+  updated_at: string;
+}
+
 export interface SessionRow {
   id: string;
   agent_id: string;

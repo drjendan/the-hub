@@ -34,7 +34,7 @@ export interface ProviderInfo {
 const DEFAULT_MODELS: Record<AIProvider, string> = {
   openai: "gpt-4o-mini",
   anthropic: "claude-3-5-haiku-latest",
-  google: "gemini-1.5-flash",
+  google: "gemini-2.0-flash",
 };
 
 const LABELS: Record<AIProvider, string> = {
@@ -95,6 +95,14 @@ export interface GenerateJSONArgs {
   user: string;
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Optional per-call overrides. When `apiKey` is set it is used instead of the
+   * env key (this is how a tenant's BYO key is injected for an agent run). When
+   * `model` is set it overrides the provider's default/env model. Both fall back
+   * to the env-based resolution when omitted, so existing callers are unchanged.
+   */
+  apiKey?: string;
+  model?: string;
 }
 
 /**
@@ -104,13 +112,14 @@ export interface GenerateJSONArgs {
  */
 export async function generateJSON<T = unknown>(args: GenerateJSONArgs): Promise<T> {
   const { provider } = args;
-  const apiKey = keyFor(provider);
+  const apiKey = args.apiKey || keyFor(provider);
   if (!apiKey) throw new Error(`No API key configured for provider "${provider}"`);
+  const model = args.model || modelFor(provider);
 
   let raw: string;
-  if (provider === "openai") raw = await callOpenAI(apiKey, args);
-  else if (provider === "anthropic") raw = await callAnthropic(apiKey, args);
-  else raw = await callGoogle(apiKey, args);
+  if (provider === "openai") raw = await callOpenAI(apiKey, model, args);
+  else if (provider === "anthropic") raw = await callAnthropic(apiKey, model, args);
+  else raw = await callGoogle(apiKey, model, args);
 
   const cleaned = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
   return JSON.parse(cleaned) as T;
@@ -119,12 +128,12 @@ export async function generateJSON<T = unknown>(args: GenerateJSONArgs): Promise
 // --------------------------------------------------------------------
 // OpenAI — Chat Completions
 // --------------------------------------------------------------------
-async function callOpenAI(apiKey: string, args: GenerateJSONArgs): Promise<string> {
+async function callOpenAI(apiKey: string, model: string, args: GenerateJSONArgs): Promise<string> {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: modelFor("openai"),
+      model,
       temperature: args.temperature ?? 0.3,
       max_tokens: args.maxTokens ?? 900,
       store: false, // opt out of server-side retention
@@ -143,7 +152,7 @@ async function callOpenAI(apiKey: string, args: GenerateJSONArgs): Promise<strin
 // --------------------------------------------------------------------
 // Anthropic — Messages API
 // --------------------------------------------------------------------
-async function callAnthropic(apiKey: string, args: GenerateJSONArgs): Promise<string> {
+async function callAnthropic(apiKey: string, model: string, args: GenerateJSONArgs): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -152,7 +161,7 @@ async function callAnthropic(apiKey: string, args: GenerateJSONArgs): Promise<st
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: modelFor("anthropic"),
+      model,
       max_tokens: args.maxTokens ?? 900,
       temperature: args.temperature ?? 0.3,
       system: args.system + " Respond with a single valid JSON object and nothing else.",
@@ -170,8 +179,7 @@ async function callAnthropic(apiKey: string, args: GenerateJSONArgs): Promise<st
 // --------------------------------------------------------------------
 // Google — Gemini generateContent
 // --------------------------------------------------------------------
-async function callGoogle(apiKey: string, args: GenerateJSONArgs): Promise<string> {
-  const model = modelFor("google");
+async function callGoogle(apiKey: string, model: string, args: GenerateJSONArgs): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const generationConfig: Record<string, unknown> = {

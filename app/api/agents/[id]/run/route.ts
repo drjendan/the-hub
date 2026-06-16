@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { resolveProvider, generateJSON } from "@/lib/ai";
+import { resolveProvider, generateJSON, type AIProvider } from "@/lib/ai";
+import { getOrgProviderKey } from "@/lib/provider-keys";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 import { refreshAccessToken, listMessageIds, getMessageMeta } from "@/lib/google";
 
@@ -25,7 +26,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   // Load the agent + its latest system prompt.
   const { data: agent } = await supabase
     .from("agents")
-    .select("id, name, status")
+    .select("id, name, status, organization_id")
     .eq("id", params.id)
     .maybeSingle();
   if (!agent) return NextResponse.json({ error: "Agent not found" }, { status: 404 });
@@ -60,13 +61,25 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     .maybeSingle();
   const systemPrompt = ver?.system_prompt || "You are a spam-detection assistant.";
 
-  // The AI provider that will classify.
-  const provider = resolveProvider();
-  if (!provider) {
-    return NextResponse.json(
-      { error: "No AI provider configured. Set an API key (e.g. GOOGLE_API_KEY)." },
-      { status: 503 }
-    );
+  // The AI credential that will classify. Prefer the tenant's BYO key (so the
+  // run bills to their account); fall back to the platform env key otherwise.
+  let provider: AIProvider;
+  let apiKeyOverride: string | undefined;
+  let modelOverride: string | undefined;
+  const tenantKey = await getOrgProviderKey(agent.organization_id);
+  if (tenantKey) {
+    provider = tenantKey.provider;
+    apiKeyOverride = tenantKey.apiKey;
+    modelOverride = tenantKey.model ?? undefined;
+  } else {
+    const platform = resolveProvider();
+    if (!platform) {
+      return NextResponse.json(
+        { error: "No AI provider configured. Add a key in Settings, or set a platform key." },
+        { status: 503 }
+      );
+    }
+    provider = platform;
   }
 
   // The user's Gmail connection.
@@ -134,6 +147,8 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       try {
         const out = await generateJSON<{ spam?: boolean; reason?: string }>({
           provider,
+          apiKey: apiKeyOverride,
+          model: modelOverride,
           system,
           user: JSON.stringify({ from: m.from, subject: m.subject, snippet: m.snippet }),
           temperature: 0,

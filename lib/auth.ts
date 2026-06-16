@@ -182,3 +182,27 @@ export async function currentAdmin(): Promise<{ user: User; profile: Profile } |
   if (profile.app_role !== "admin") return null;
   return { user, profile };
 }
+
+/**
+ * Non-redirecting owner check for API route handlers. The "owner" is the tenant
+ * admin (org_role = 'owner') of the caller's *active* organization — the role
+ * allowed to manage that company's BYO provider keys. Returns the user + the
+ * active org id, or null if the caller is not a signed-in owner of an org.
+ */
+export async function currentOrgOwner(): Promise<{ user: User; orgId: string } | null> {
+  const user = await getUser();
+  if (!user) return null;
+  const profile = await ensureProfile(user);
+  const orgs = await getOrgsForUser();
+  const orgId = await getCurrentOrgId(orgs, profile);
+  if (!orgId) return null;
+  const isOwner = orgs.some((o) => o.id === orgId && o.org_role === "owner");
+  return isOwner ? { user, orgId } : null;
+}
+
+/** Require an org owner — redirects non-owners to the dashboard. */
+export async function requireOrgOwner(): Promise<{ user: User; orgId: string }> {
+  const owner = await currentOrgOwner();
+  if (!owner) redirect("/");
+  return owner;
+}
