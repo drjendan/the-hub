@@ -48,7 +48,7 @@ export default async function DashboardPage() {
   }
 
   const supabase = createClient();
-  const [{ data: agentRows }, { count: openGov }] = await Promise.all([
+  const [{ data: agentRows }, { count: openGov }, { count: appCount }] = await Promise.all([
     supabase
       .from("agents")
       .select("id, slug, name, status, risk, category, created_at, owner:profiles(full_name, email)")
@@ -59,6 +59,11 @@ export default async function DashboardPage() {
       .select("id", { count: "exact", head: true })
       .eq("organization_id", orgId)
       .eq("status", "open"),
+    // Apps count — resilient: returns null (shown as 0) until apps.sql is run.
+    supabase
+      .from("apps")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", orgId),
   ]);
 
   const agents = agentRows || [];
@@ -82,9 +87,10 @@ export default async function DashboardPage() {
 
       <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile label="Total agents" value={String(agents.length)} hint="in this company" delay="rise-1" />
-        <StatTile label="Published" value={String(published)} hint="live in catalog" delay="rise-2" />
-        <StatTile label="In review" value={String(inReview)} hint="awaiting governance" delay="rise-3" />
-        <StatTile label="Open requests" value={String(openGov ?? 0)} hint="governance queue" delay="rise-4" />
+        <StatTile label="Total apps" value={String(appCount ?? 0)} hint="launchable tools" delay="rise-2" />
+        <StatTile label="Published" value={String(published)} hint="agents live in catalog" delay="rise-3" />
+        <StatTile label="In review" value={String(inReview)} hint="agents awaiting governance" delay="rise-4" />
+        <StatTile label="Open requests" value={String(openGov ?? 0)} hint="governance queue" delay="rise-5" />
       </div>
 
       <div className="mt-6 grid lg:grid-cols-3 gap-6">

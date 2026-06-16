@@ -24,25 +24,45 @@ export default async function GovernancePage() {
   }
 
   const supabase = createClient();
-  const { data } = await supabase
-    .from("governance_requests")
-    .select("id, kind, status, title, detail, risk, created_at, resolved_at, agent:agents(name, slug)")
-    .eq("organization_id", orgId)
-    .order("created_at", { ascending: false });
+  const baseCols = "id, kind, status, title, detail, risk, created_at, resolved_at, agent:agents(name, slug)";
 
-  const items: GovItem[] = (data || []).map((r) => {
-    const agent = r.agent as unknown as { name: string; slug: string } | null;
+  // App-aware query. If the apps migration hasn't been run yet (no app_id column),
+  // fall back to the agent-only query so the existing agent governance keeps working.
+  let rows = (
+    await supabase
+      .from("governance_requests")
+      .select(`${baseCols}, app_id, app:apps(name)`)
+      .eq("organization_id", orgId)
+      .order("created_at", { ascending: false })
+  ).data as unknown as Record<string, unknown>[] | null;
+  if (rows === null) {
+    rows = (
+      await supabase
+        .from("governance_requests")
+        .select(baseCols)
+        .eq("organization_id", orgId)
+        .order("created_at", { ascending: false })
+    ).data as unknown as Record<string, unknown>[] | null;
+  }
+
+  const items: GovItem[] = (rows || []).map((r) => {
+    const row = r as Record<string, unknown>;
+    const agent = row.agent as { name: string; slug: string } | null;
+    const app = row.app as { name: string } | null;
+    const appId = (row.app_id as string | null) ?? null;
     return {
-      id: r.id,
-      kind: r.kind,
-      status: r.status,
-      title: r.title,
-      detail: r.detail,
-      risk: r.risk,
-      created_at: r.created_at,
-      resolved_at: r.resolved_at,
+      id: row.id as string,
+      kind: row.kind as GovItem["kind"],
+      status: row.status as GovItem["status"],
+      title: row.title as string,
+      detail: row.detail as string | null,
+      risk: row.risk as GovItem["risk"],
+      created_at: row.created_at as string,
+      resolved_at: row.resolved_at as string | null,
+      entity: appId ? "app" : "agent",
       agent_name: agent?.name ?? null,
       agent_slug: agent?.slug ?? null,
+      app_name: app?.name ?? null,
     };
   });
 

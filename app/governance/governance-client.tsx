@@ -15,8 +15,10 @@ export interface GovItem {
   risk: RiskTier;
   created_at: string;
   resolved_at: string | null;
+  entity: "agent" | "app";
   agent_name: string | null;
   agent_slug: string | null;
+  app_name: string | null;
 }
 
 export function GovernanceClient({ items, canReview }: { items: GovItem[]; canReview: boolean }) {
@@ -101,6 +103,9 @@ function RequestCard({ item, canReview }: { item: GovItem; canReview: boolean })
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wide rounded bg-accent/10 px-1.5 py-0.5 text-accent font-medium">
+              {item.entity}
+            </span>
             <span className="text-[10px] uppercase tracking-wide rounded bg-black/[0.05] px-1.5 py-0.5 text-ink-soft">
               {item.kind.replace("_", " ")}
             </span>
@@ -108,9 +113,14 @@ function RequestCard({ item, canReview }: { item: GovItem; canReview: boolean })
           </div>
           <h3 className="mt-2 display text-[17px] font-semibold">{item.title}</h3>
           <p className="mt-1 text-[13px] text-ink-soft">{item.detail}</p>
-          {item.agent_slug && (
+          {item.entity === "agent" && item.agent_slug && (
             <Link href={`/hub/${item.agent_slug}`} className="mt-1 inline-block text-[12px] text-accent hover:underline">
               View {item.agent_name} →
+            </Link>
+          )}
+          {item.entity === "app" && item.app_name && (
+            <Link href="/apps" className="mt-1 inline-block text-[12px] text-accent hover:underline">
+              View {item.app_name} in Apps →
             </Link>
           )}
         </div>

@@ -33,7 +33,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   const { data: request } = await supabase
     .from("governance_requests")
-    .select("id, organization_id, agent_id, kind, status")
+    .select("id, organization_id, agent_id, app_id, kind, status")
     .eq("id", params.id)
     .maybeSingle();
   if (!request) return NextResponse.json({ error: "Request not found" }, { status: 404 });
@@ -71,6 +71,15 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       await supabase.from("agents").update({ status: "published" }).eq("id", request.agent_id);
     } else if (decision === "rejected") {
       await supabase.from("agents").update({ status: "blocked" }).eq("id", request.agent_id);
+    }
+  }
+
+  // Same reflection for an app publish request (apps reuse this exact flow).
+  if (request.kind === "publish" && request.app_id) {
+    if (decision === "approved") {
+      await supabase.from("apps").update({ status: "published" }).eq("id", request.app_id);
+    } else if (decision === "rejected") {
+      await supabase.from("apps").update({ status: "blocked" }).eq("id", request.app_id);
     }
   }
 

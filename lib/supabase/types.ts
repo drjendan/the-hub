@@ -76,6 +76,7 @@ export interface Recommendation {
 export interface GovernanceRequest {
   id: string;
   agent_id: string | null;
+  app_id: string | null;
   kind: RequestKind;
   status: RequestStatus;
   title: string;
@@ -83,6 +84,21 @@ export interface GovernanceRequest {
   risk: RiskTier;
   created_at: string;
   resolved_at: string | null;
+}
+
+// Apps — governed, launchable links to existing tools. Status reuses the
+// agent_status values (see supabase/apps.sql), so AgentStatus types it.
+export interface AppRecord {
+  id: string;
+  organization_id: string;
+  name: string;
+  url: string;
+  description: string | null;
+  category: string | null;
+  status: AgentStatus;
+  product_owner: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // Per-tenant BYO provider key — masked shape only (the encrypted key is never

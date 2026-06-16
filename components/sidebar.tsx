@@ -8,6 +8,7 @@ import type { AppRole } from "@/lib/supabase/types";
 const NAV = [
   { href: "/", label: "Dashboard", glyph: "◈" },
   { href: "/hub", label: "Library", glyph: "⬡" },
+  { href: "/apps", label: "Apps", glyph: "▦" },
   { href: "/intake/role", label: "Role Match", glyph: "⊹" },
   { href: "/builder", label: "Builder", glyph: "✎" },
   { href: "/sessions", label: "Sessions", glyph: "❖" },
