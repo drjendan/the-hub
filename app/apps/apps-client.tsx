@@ -16,12 +16,19 @@ export interface AppRow {
   created_at: string;
   owner_name: string;
   org_name: string;
+  org_logo_url: string | null;
   can_delete: boolean;
 }
 
 export interface Member {
   id: string;
   name: string;
+}
+
+export interface Org {
+  id: string;
+  name: string;
+  logo_url: string | null;
 }
 
 const STATUSES: ("All" | AgentStatus)[] = ["All", "published", "in_review", "blocked"];
@@ -36,16 +43,18 @@ function fmtDate(iso: string): string {
 
 export function AppsClient({
   apps,
-  members,
-  companyName,
+  orgs,
+  membersByOrg,
   canCreate,
   currentUserId,
+  currentOrgId,
 }: {
   apps: AppRow[];
-  members: Member[];
-  companyName: string;
+  orgs: Org[];
+  membersByOrg: Record<string, Member[]>;
   canCreate: boolean;
   currentUserId: string;
+  currentOrgId: string;
 }) {
   const [q, setQ] = useState("");
   const [owner, setOwner] = useState("All");
@@ -57,11 +66,10 @@ export function AppsClient({
     () => ["All", ...Array.from(new Set(apps.map((a) => a.owner_name))).sort()],
     [apps]
   );
-  const companies = useMemo(
-    () => ["All", ...Array.from(new Set(apps.map((a) => a.org_name))).sort()],
-    [apps]
-  );
-  const multiCompany = companies.length > 2;
+  // Company filter is built from the user's companies, so it's available even
+  // before any apps exist in a given company.
+  const companies = useMemo(() => ["All", ...orgs.map((o) => o.name)], [orgs]);
+  const multiCompany = orgs.length > 1;
 
   const results = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -97,9 +105,10 @@ export function AppsClient({
 
       {showForm && canCreate && (
         <RegisterForm
-          members={members}
-          companyName={companyName}
+          orgs={orgs}
+          membersByOrg={membersByOrg}
           currentUserId={currentUserId}
+          currentOrgId={currentOrgId}
           onDone={() => setShowForm(false)}
         />
       )}
@@ -187,9 +196,14 @@ function AppCard({ app: a, multiCompany }: { app: AppRow; multiCompany: boolean 
   return (
     <div className="card p-5 flex flex-col">
       <div className="flex items-start justify-between gap-2">
-        <div className="grid h-11 w-11 place-items-center rounded-xl bg-paper text-ink text-sm font-semibold border hairline">
-          {a.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
-        </div>
+        {a.org_logo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element -- user-uploaded company logo
+          <img src={a.org_logo_url} alt="" className="h-11 w-11 rounded-xl border hairline bg-white object-contain" />
+        ) : (
+          <div className="grid h-11 w-11 place-items-center rounded-xl bg-paper text-ink text-sm font-semibold border hairline">
+            {a.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
+          </div>
+        )}
         <StatusBadge status={a.status} />
       </div>
       <h3 className="mt-3 display text-[17px] font-semibold leading-tight">{a.name}</h3>
@@ -226,10 +240,7 @@ function AppCard({ app: a, multiCompany }: { app: AppRow; multiCompany: boolean 
         <div className="mt-3 border-t hairline pt-3">
           {err && <p className="mb-2 text-[12px] text-rust">{err}</p>}
           {!confirming ? (
-            <button
-              onClick={() => setConfirming(true)}
-              className="text-[12px] text-rust hover:underline"
-            >
+            <button onClick={() => setConfirming(true)} className="text-[12px] text-rust hover:underline">
               Delete app
             </button>
           ) : (
@@ -252,24 +263,42 @@ function AppCard({ app: a, multiCompany }: { app: AppRow; multiCompany: boolean 
 }
 
 function RegisterForm({
-  members,
-  companyName,
+  orgs,
+  membersByOrg,
   currentUserId,
+  currentOrgId,
   onDone,
 }: {
-  members: Member[];
-  companyName: string;
+  orgs: Org[];
+  membersByOrg: Record<string, Member[]>;
   currentUserId: string;
+  currentOrgId: string;
   onDone: () => void;
 }) {
   const router = useRouter();
+
+  const defaultOrg = orgs.some((o) => o.id === currentOrgId) ? currentOrgId : orgs[0]?.id || "";
+  const ownerFor = (orgId: string) => {
+    const members = membersByOrg[orgId] || [];
+    if (members.some((m) => m.id === currentUserId)) return currentUserId;
+    return members[0]?.id || currentUserId;
+  };
+
+  const [orgIdSel, setOrgIdSel] = useState(defaultOrg);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
-  const [productOwner, setProductOwner] = useState(currentUserId);
+  const [productOwner, setProductOwner] = useState(ownerFor(defaultOrg));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const members = membersByOrg[orgIdSel] || [];
+
+  function changeOrg(next: string) {
+    setOrgIdSel(next);
+    setProductOwner(ownerFor(next));
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -280,6 +309,7 @@ function RegisterForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          organization_id: orgIdSel,
           name,
           url,
           category: category || undefined,
@@ -303,10 +333,23 @@ function RegisterForm({
   return (
     <div className="mt-6 card p-5">
       <h2 className="display text-[18px] font-semibold mb-1">Register an app</h2>
-      <p className="text-[12px] text-ink-soft mb-4">
-        In <span className="font-medium text-ink">{companyName}</span> · submitted for governance review before it can launch.
-      </p>
+      <p className="text-[12px] text-ink-soft mb-4">Submitted for governance review before it can launch.</p>
       <form onSubmit={submit} className="grid sm:grid-cols-2 gap-3">
+        <label className="block">
+          <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Company</span>
+          <select value={orgIdSel} onChange={(e) => changeOrg(e.target.value)}
+            className="w-full rounded-lg border hairline bg-white px-3 py-2.5 outline-none focus:border-accent">
+            {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Product owner</span>
+          <select value={productOwner} onChange={(e) => setProductOwner(e.target.value)}
+            className="w-full rounded-lg border hairline bg-white px-3 py-2.5 outline-none focus:border-accent">
+            {members.length === 0 && <option value={currentUserId}>You</option>}
+            {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </label>
         <label className="block">
           <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">App name</span>
           <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="LV Lead Financials"
@@ -316,14 +359,6 @@ function RegisterForm({
           <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Launch URL</span>
           <input value={url} onChange={(e) => setUrl(e.target.value)} required type="url" placeholder="https://…"
             className="w-full rounded-lg border hairline bg-white px-3 py-2.5 outline-none focus:border-accent" />
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Product owner</span>
-          <select value={productOwner} onChange={(e) => setProductOwner(e.target.value)}
-            className="w-full rounded-lg border hairline bg-white px-3 py-2.5 outline-none focus:border-accent">
-            {members.length === 0 && <option value={currentUserId}>You</option>}
-            {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </select>
         </label>
         <label className="block">
           <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Category (optional)</span>

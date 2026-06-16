@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getUser, getCurrentOrgId, ensureProfile } from "@/lib/auth";
+import { getUser, getCurrentOrgId, getOrgsForUser, ensureProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -25,19 +25,31 @@ export async function POST(req: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const orgId = await getCurrentOrgId();
-  if (!orgId) {
-    return NextResponse.json(
-      { error: "You are not part of a company yet. Ask your admin to add you." },
-      { status: 400 }
-    );
-  }
-
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  // Resolve the target company: an explicit organization_id the caller is a
+  // member of (enforces the tenant boundary), else the active workspace.
+  const orgs = await getOrgsForUser();
+  const requestedOrg = typeof body.organization_id === "string" ? body.organization_id : "";
+  let orgId: string | null;
+  if (requestedOrg) {
+    if (!orgs.some((o) => o.id === requestedOrg)) {
+      return NextResponse.json({ error: "You are not a member of the selected company." }, { status: 403 });
+    }
+    orgId = requestedOrg;
+  } else {
+    orgId = await getCurrentOrgId(orgs);
+  }
+  if (!orgId) {
+    return NextResponse.json(
+      { error: "You are not part of a company yet. Ask your admin to add you." },
+      { status: 400 }
+    );
   }
 
   const name = String(body.name || "").trim();
@@ -51,11 +63,22 @@ export async function POST(req: Request) {
 
   const description = body.description ? String(body.description) : null;
   const category = body.category ? String(body.category) : null;
-  // product_owner is a profile id; default to the creator if none chosen.
-  const productOwner =
-    typeof body.product_owner === "string" && body.product_owner ? body.product_owner : user.id;
 
   const supabase = createClient();
+
+  // product_owner is a profile id; default to the creator, and ensure any chosen
+  // owner is actually a member of the target company (keeps attribution clean).
+  let productOwner =
+    typeof body.product_owner === "string" && body.product_owner ? body.product_owner : user.id;
+  if (productOwner !== user.id) {
+    const { data: pm } = await supabase
+      .from("org_members")
+      .select("user_id")
+      .eq("organization_id", orgId)
+      .eq("user_id", productOwner)
+      .maybeSingle();
+    if (!pm) productOwner = user.id;
+  }
 
   const { data: app, error } = await supabase
     .from("apps")

@@ -37,6 +37,7 @@ export interface Organization {
   industry: string | null;
   size_band: string | null;
   governance_mode: string | null;
+  logo_url: string | null;
   created_at: string;
 }
 

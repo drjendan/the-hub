@@ -18,6 +18,7 @@ export interface AdminOrg {
   industry: string | null;
   size_band: string | null;
   created_at: string;
+  logo_url: string | null;
   members: AdminMember[];
 }
 
@@ -119,6 +120,69 @@ export function AdminClient({ orgs }: { orgs: AdminOrg[] }) {
   );
 }
 
+function LogoUpload({ org, onChanged }: { org: AdminOrg; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function upload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("org_id", org.id);
+      const res = await fetch("/api/admin/logo", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "Upload failed.");
+        return;
+      }
+      onChanged();
+    } finally {
+      setBusy(false);
+      e.target.value = "";
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/admin/logo", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ org_id: org.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setMsg(data.error || "Could not remove logo.");
+        return;
+      }
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-3">
+      <label className="cursor-pointer text-[12px] text-accent hover:underline">
+        {busy ? "Working…" : org.logo_url ? "Replace logo" : "Upload logo"}
+        <input type="file" accept="image/png,image/jpeg,image/webp" onChange={upload} disabled={busy} className="hidden" />
+      </label>
+      {org.logo_url && (
+        <button onClick={remove} disabled={busy} className="text-[12px] text-rust hover:underline disabled:opacity-40">
+          Remove
+        </button>
+      )}
+      <span className="text-[11px] text-ink-soft/70">PNG/JPEG/WebP · ≤1 MB</span>
+      {msg && <span className="text-[12px] text-rust">{msg}</span>}
+    </div>
+  );
+}
+
 function OrgCard({ org, onChanged }: { org: AdminOrg; onChanged: () => void }) {
   const [email, setEmail] = useState("");
   const [orgRole, setOrgRole] = useState("staff");
@@ -172,14 +236,25 @@ function OrgCard({ org, onChanged }: { org: AdminOrg; onChanged: () => void }) {
   return (
     <div className="card p-5">
       <div className="flex items-start justify-between gap-3 border-b hairline pb-4">
-        <div>
-          <h3 className="display text-[18px] font-semibold leading-tight">{org.name}</h3>
-          <div className="mt-1 text-[12px] text-ink-soft">
-            {[org.industry, org.size_band].filter(Boolean).join(" · ") || "—"}
-            <span className="mono"> · {org.slug}</span>
+        <div className="flex items-start gap-3 min-w-0">
+          {org.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element -- user-uploaded company logo
+            <img src={org.logo_url} alt="" className="h-12 w-12 shrink-0 rounded-lg border hairline bg-white object-contain" />
+          ) : (
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border hairline bg-paper text-ink text-sm font-semibold">
+              {org.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
+            </div>
+          )}
+          <div className="min-w-0">
+            <h3 className="display text-[18px] font-semibold leading-tight">{org.name}</h3>
+            <div className="mt-1 text-[12px] text-ink-soft">
+              {[org.industry, org.size_band].filter(Boolean).join(" · ") || "—"}
+              <span className="mono"> · {org.slug}</span>
+            </div>
+            <LogoUpload org={org} onChanged={onChanged} />
           </div>
         </div>
-        <span className="text-[11px] text-ink-soft">
+        <span className="shrink-0 text-[11px] text-ink-soft">
           {org.members.length} member{org.members.length === 1 ? "" : "s"}
         </span>
       </div>

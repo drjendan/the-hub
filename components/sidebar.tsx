@@ -22,6 +22,7 @@ interface OrgRef {
   id: string;
   name: string;
   org_role: string;
+  logo_url: string | null;
 }
 
 export function Sidebar({
@@ -74,17 +75,32 @@ export function Sidebar({
       <div className="px-4 pt-4">
         <div className="text-[10px] uppercase tracking-[0.14em] text-ink-soft/70 mb-1.5">Workspace</div>
         {orgs.length > 0 ? (
-          <select
-            value={currentOrgId ?? ""}
-            onChange={(e) => switchOrg(e.target.value)}
-            className="w-full rounded-lg border hairline bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
-          >
-            {orgs.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
+          <>
+            {currentOrg && (
+              <div className="mb-2 flex items-center gap-2">
+                {currentOrg.logo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- user-uploaded company logo
+                  <img src={currentOrg.logo_url} alt="" className="h-7 w-7 shrink-0 rounded-md border hairline bg-white object-contain" />
+                ) : (
+                  <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md border hairline bg-white text-[10px] font-semibold text-ink">
+                    {currentOrg.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
+                  </div>
+                )}
+                <span className="truncate text-[13px] font-medium">{currentOrg.name}</span>
+              </div>
+            )}
+            <select
+              value={currentOrgId ?? ""}
+              onChange={(e) => switchOrg(e.target.value)}
+              className="w-full rounded-lg border hairline bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+            >
+              {orgs.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </>
         ) : (
           <div className="rounded-lg border hairline bg-white px-2.5 py-2 text-[12px] text-ink-soft">
             No company yet

@@ -20,6 +20,7 @@ export interface OrgRef {
   id: string;
   name: string;
   org_role: string;
+  logo_url: string | null;
 }
 
 /** Emails listed in ADMIN_EMAILS are auto-promoted to the global admin role. */
@@ -122,15 +123,26 @@ export async function ensureProfile(user: User): Promise<Profile> {
 /** Organizations the signed-in user belongs to (RLS-scoped). */
 export async function getOrgsForUser(): Promise<OrgRef[]> {
   const supabase = createClient();
-  const { data } = await supabase
+  // Try selecting logo_url; fall back if the logos migration hasn't been run yet,
+  // so the whole app (which loads this in the layout) keeps working regardless.
+  let res = (await supabase
     .from("org_members")
-    .select("org_role, organization:organizations(id, name)")
-    .order("created_at", { ascending: true });
+    .select("org_role, organization:organizations(id, name, logo_url)")
+    .order("created_at", { ascending: true })) as { data: unknown; error: unknown };
+  if (res.error) {
+    res = (await supabase
+      .from("org_members")
+      .select("org_role, organization:organizations(id, name)")
+      .order("created_at", { ascending: true })) as { data: unknown; error: unknown };
+  }
 
-  return (data || [])
+  const rows = (res.data as Record<string, unknown>[] | null) || [];
+  return rows
     .map((row) => {
-      const org = row.organization as unknown as { id: string; name: string } | null;
-      return org ? { id: org.id, name: org.name, org_role: row.org_role as string } : null;
+      const org = row.organization as { id: string; name: string; logo_url?: string | null } | null;
+      return org
+        ? { id: org.id, name: org.name, org_role: row.org_role as string, logo_url: org.logo_url ?? null }
+        : null;
     })
     .filter((o): o is OrgRef => o !== null);
 }

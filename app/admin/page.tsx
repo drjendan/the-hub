@@ -8,16 +8,24 @@ export default async function AdminPage() {
   await requireAdmin();
   const db = createAdminClient();
 
-  const [{ data: orgs }, { data: members }] = await Promise.all([
-    db
+  const membersPromise = db
+    .from("org_members")
+    .select("organization_id, org_role, created_at, user:profiles(id, email, full_name, app_role)")
+    .order("created_at", { ascending: true });
+
+  // logo_url may not exist yet (logos.sql not run) — fall back without it.
+  let orgsResp = (await db
+    .from("organizations")
+    .select("id, name, slug, industry, size_band, created_at, logo_url")
+    .order("created_at", { ascending: false })) as unknown as { data: Record<string, unknown>[] | null; error: unknown };
+  if (orgsResp.error) {
+    orgsResp = (await db
       .from("organizations")
       .select("id, name, slug, industry, size_band, created_at")
-      .order("created_at", { ascending: false }),
-    db
-      .from("org_members")
-      .select("organization_id, org_role, created_at, user:profiles(id, email, full_name, app_role)")
-      .order("created_at", { ascending: true }),
-  ]);
+      .order("created_at", { ascending: false })) as unknown as { data: Record<string, unknown>[] | null; error: unknown };
+  }
+  const orgs = orgsResp.data;
+  const { data: members } = await membersPromise;
 
   const byOrg = new Map<string, AdminOrg["members"]>();
   for (const m of members || []) {
@@ -37,13 +45,14 @@ export default async function AdminPage() {
   }
 
   const data: AdminOrg[] = (orgs || []).map((o) => ({
-    id: o.id,
-    name: o.name,
-    slug: o.slug,
-    industry: o.industry,
-    size_band: o.size_band,
-    created_at: o.created_at,
-    members: byOrg.get(o.id) || [],
+    id: o.id as string,
+    name: o.name as string,
+    slug: o.slug as string,
+    industry: (o.industry as string | null) ?? null,
+    size_band: (o.size_band as string | null) ?? null,
+    created_at: o.created_at as string,
+    logo_url: (o.logo_url as string | null) ?? null,
+    members: byOrg.get(o.id as string) || [],
   }));
 
   return (
