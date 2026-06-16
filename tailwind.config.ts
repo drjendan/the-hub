@@ -24,9 +24,12 @@ const config: Config = {
         gold: "#b58a2e",        // pending / review
       },
       fontFamily: {
-        display: ["var(--font-display)", "Georgia", "serif"],
+        // Single typeface (Inter) — the design reference uses no serif and no
+        // separate monospace face. font-display/font-mono kept as aliases so
+        // existing class usages resolve to Inter rather than breaking.
+        display: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
-        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
+        mono: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       boxShadow: {
         card: "0 1px 2px rgba(14,17,22,0.04), 0 8px 24px -12px rgba(14,17,22,0.12)",

@@ -1,23 +1,17 @@
 import type { Metadata } from "next";
-import { Fraunces, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
+import { Footer } from "@/components/footer";
 import { getUser, ensureProfile, getOrgsForUser, getCurrentOrgId } from "@/lib/auth";
 
-const display = Fraunces({
+// Inter is the single typeface across the app (matches the design reference).
+// cv11/ss01 feature settings + antialiasing are applied globally in globals.css.
+const inter = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
-  variable: "--font-display",
-});
-const sans = Hanken_Grotesk({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
   variable: "--font-sans",
-});
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -50,11 +44,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
+    <html lang="en" className={inter.variable}>
       <body>
         <div className="relative z-10 flex min-h-screen">
           {shell}
-          <main className="flex-1 min-w-0">{children}</main>
+          <main className="flex-1 min-w-0 flex flex-col">
+            <div className="flex-1 min-w-0">{children}</div>
+            <Footer />
+          </main>
         </div>
       </body>
     </html>

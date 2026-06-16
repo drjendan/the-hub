@@ -20,7 +20,9 @@ html, body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Subtle paper grain + warm vignette behind everything */
@@ -36,11 +38,17 @@ body::before {
 }
 
 h1, h2, h3, .display {
-  font-family: var(--font-display), Georgia, serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   letter-spacing: -0.01em;
+  font-weight: 600;
 }
 
-.mono { font-family: var(--font-mono), ui-monospace, monospace; }
+/* "mono" in the design reference is Inter with tabular/contextual features,
+   not an actual monospaced face — keep that single-typeface look. */
+.mono {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+}
 
 /* Thin top-bar progress shimmer used on the dashboard hero */
 @keyframes rise {
