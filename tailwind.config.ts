@@ -9,19 +9,19 @@ const config: Config = {
     extend: {
       colors: {
         ink: {
-          DEFAULT: "#0e1116",
-          soft: "#171b22",
-          line: "#252b35",
+          DEFAULT: "#141a27",   // cool navy (headings, dark surfaces)
+          soft: "#1e2638",
+          line: "#2b3446",
         },
-        paper: "#f6f5f1",
+        paper: "#f8fafc",       // cool near-white
         accent: {
-          DEFAULT: "#c9763d",   // warm amber/copper — institutional, not "AI purple"
-          soft: "#e7a072",
-          deep: "#9b5526",
+          DEFAULT: "#2b53d1",   // royal blue — matches the PrimeTDAP brand
+          soft: "#7591e6",
+          deep: "#1e3fa8",
         },
-        moss: "#3f6f5b",        // approved / healthy
-        rust: "#a8442f",        // blocked / risk
-        gold: "#b58a2e",        // pending / review
+        moss: "#1d7d5f",        // approved / healthy (cool emerald)
+        rust: "#c43d3d",        // blocked / risk (clean red)
+        gold: "#b8801c",        // pending / review (amber)
       },
       fontFamily: {
         // Single typeface (Inter) — the design reference uses no serif and no

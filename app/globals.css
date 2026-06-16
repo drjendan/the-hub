@@ -3,13 +3,14 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f6f5f1;
-  --bg-2: #efede6;
-  --ink: #0e1116;
-  --ink-soft: #3a414c;
-  --line: #e2dfd6;
-  --accent: #c9763d;
-  --accent-deep: #9b5526;
+  /* Theme matched to PrimeTDAP: cool near-white, navy ink, royal-blue accent. */
+  --bg: #f8fafc;
+  --bg-2: #eef2f7;
+  --ink: #141a27;
+  --ink-soft: #5b6573;
+  --line: #e5e9f0;
+  --accent: #2b53d1;
+  --accent-deep: #1e3fa8;
 }
 
 * { box-sizing: border-box; }
@@ -33,8 +34,8 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(1200px 600px at 85% -10%, rgba(201,118,61,0.10), transparent 60%),
-    radial-gradient(900px 500px at -5% 110%, rgba(63,111,91,0.08), transparent 55%);
+    radial-gradient(1200px 600px at 85% -10%, rgba(43,83,209,0.08), transparent 60%),
+    radial-gradient(900px 500px at -5% 110%, rgba(91,101,115,0.06), transparent 55%);
 }
 
 h1, h2, h3, .display {
@@ -76,8 +77,8 @@ input, select, textarea {
   font-size: 0.92rem;
 }
 
-::selection { background: rgba(201,118,61,0.22); }
+::selection { background: rgba(43,83,209,0.16); }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #d8d4c8; border-radius: 8px; border: 3px solid var(--bg); }
+::-webkit-scrollbar-thumb { background: #ccd4e1; border-radius: 8px; border: 3px solid var(--bg); }
