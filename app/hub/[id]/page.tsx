@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getUser } from "@/lib/auth";
+import { getUser, ensureProfile } from "@/lib/auth";
 import { googleOAuthConfigured } from "@/lib/google";
 import { StatusBadge, RiskTag } from "@/components/ui";
 import { connectorLabel } from "@/lib/connectors";
 import { AgentRunner } from "./agent-runner";
+import { AgentActions } from "./agent-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,12 @@ export default async function AgentProfile({ params }: { params: { id: string } 
   const oauthConfigured = googleOAuthConfigured();
   const showRunner = oauthConfigured || Boolean(conn);
 
+  // Delete permission (also enforced server-side in /api/agents DELETE):
+  // an admin/builder of the company, or the agent's owner.
+  const profile = user ? await ensureProfile(user) : null;
+  const canManage = profile?.app_role === "admin" || profile?.app_role === "builder";
+  const canDelete = canManage || (!!user && agent.owner_id === user.id);
+
   return (
     <div className="px-6 sm:px-10 py-8 max-w-5xl mx-auto">
       <Link href="/hub" className="text-[13px] text-accent hover:underline">← Back to Library</Link>
@@ -77,10 +84,13 @@ export default async function AgentProfile({ params }: { params: { id: string } 
             <span className="mono">v{agent.current_version}</span>
           </div>
         </div>
-        <Link href="/builder"
-          className="rounded-lg border hairline bg-white px-4 py-2.5 text-[13px] font-medium hover:bg-black/[0.03] transition-colors">
-          New agent
-        </Link>
+        <div className="flex flex-col items-stretch gap-2">
+          <Link href="/builder"
+            className="rounded-lg border hairline bg-white px-4 py-2.5 text-center text-[13px] font-medium hover:bg-black/[0.03] transition-colors">
+            New agent
+          </Link>
+          {canDelete && <AgentActions agentId={agent.id} agentName={agent.name} />}
+        </div>
       </div>
 
       <div className="mt-6 grid lg:grid-cols-3 gap-6">

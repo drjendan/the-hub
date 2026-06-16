@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getUser, getCurrentOrgId } from "@/lib/auth";
+import { getUser, getCurrentOrgId, ensureProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -94,4 +94,57 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json({ id: app.id, status: app.status });
+}
+
+/**
+ * DELETE /api/apps  Body: { id }
+ * Hard-deletes an app. Permission (enforced here AND by RLS): the caller must be
+ * a member of the app's company AND (an admin/builder OR the app's product owner).
+ * Related governance_requests are removed automatically by the app_id FK cascade.
+ */
+export async function DELETE(req: Request) {
+  const user = await getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  let body: { id?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const id = typeof body.id === "string" ? body.id : "";
+  if (!id) return NextResponse.json({ error: "App id is required" }, { status: 400 });
+
+  const supabase = createClient();
+
+  // RLS read: a member can see the row. If not visible, it's not in your company.
+  const { data: app } = await supabase
+    .from("apps")
+    .select("id, product_owner")
+    .eq("id", id)
+    .maybeSingle();
+  if (!app) return NextResponse.json({ error: "App not found in your company." }, { status: 404 });
+
+  const profile = await ensureProfile(user);
+  const allowed =
+    profile.app_role === "admin" ||
+    profile.app_role === "builder" ||
+    app.product_owner === user.id;
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Only an admin/builder of this company or the product owner can delete this app." },
+      { status: 403 }
+    );
+  }
+
+  const { data: deleted, error } = await supabase.from("apps").delete().eq("id", id).select("id");
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!deleted || deleted.length === 0) {
+    // RLS blocked it (e.g. owner-delete without the optional deletes.sql policy).
+    return NextResponse.json(
+      { error: "Delete was blocked by policy. An admin/builder can delete it, or run supabase/deletes.sql to allow owner deletes." },
+      { status: 403 }
+    );
+  }
+  return NextResponse.json({ ok: true });
 }

@@ -40,6 +40,7 @@ export default async function AppsPage() {
       .eq("organization_id", orgId),
   ]);
 
+  const canManage = profile.app_role === "admin" || profile.app_role === "builder";
   const apps: AppRow[] = (appData || []).map((a) => {
     const owner = a.owner as unknown as { full_name: string | null; email: string | null } | null;
     const org = a.org as unknown as { name: string } | null;
@@ -53,6 +54,7 @@ export default async function AppsPage() {
       created_at: a.created_at,
       owner_name: owner?.full_name || owner?.email || "Unassigned",
       org_name: org?.name || "—",
+      can_delete: canManage || a.product_owner === user.id,
     };
   });
 

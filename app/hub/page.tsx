@@ -1,11 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
-import { getUser } from "@/lib/auth";
+import { getUser, ensureProfile } from "@/lib/auth";
 import { HubClient, type AgentRow } from "./hub-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function HubPage() {
   const user = await getUser();
+  const profile = user ? await ensureProfile(user) : null;
+  const canManage = profile?.app_role === "admin" || profile?.app_role === "builder";
   const supabase = createClient();
 
   const { data } = await supabase
@@ -34,6 +36,7 @@ export default async function HubPage() {
       owner_name: owner?.full_name || owner?.email || "Unknown",
       org_name: org?.name || "—",
       is_mine: !!user && a.owner_id === user.id,
+      can_delete: canManage || (!!user && a.owner_id === user.id),
     };
   });
 

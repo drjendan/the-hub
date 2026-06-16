@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { StatusBadge, RiskTag } from "@/components/ui";
 import { connectorLabel } from "@/lib/connectors";
 import type { AgentStatus, RiskTier } from "@/lib/supabase/types";
@@ -22,6 +23,7 @@ export interface AgentRow {
   owner_name: string;
   org_name: string;
   is_mine: boolean;
+  can_delete: boolean;
 }
 
 const STATUSES: ("All" | AgentStatus)[] = ["All", "published", "in_review", "draft", "blocked"];
@@ -126,41 +128,7 @@ export function HubClient({ agents }: { agents: AgentRow[] }) {
       {/* Grid */}
       <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {results.map((a) => (
-          <Link key={a.id} href={`/hub/${a.slug}`}
-            className="card p-5 hover:shadow-lift hover:-translate-y-0.5 transition-all">
-            <div className="flex items-start justify-between gap-2">
-              <div className="grid h-11 w-11 place-items-center rounded-xl bg-paper text-ink text-sm font-semibold border hairline">
-                {a.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
-              </div>
-              <StatusBadge status={a.status} />
-            </div>
-            <h3 className="mt-3 display text-[17px] font-semibold leading-tight">{a.name}</h3>
-            <p className="mt-1.5 text-[13px] text-ink-soft leading-snug line-clamp-2">{a.summary}</p>
-            {a.connectors.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {a.connectors.slice(0, 3).map((c) => (
-                  <span key={c} className="rounded-md bg-black/[0.04] px-2 py-0.5 text-[11px] text-ink-soft">{connectorLabel(c)}</span>
-                ))}
-                {a.connectors.length > 3 && (
-                  <span className="rounded-md bg-black/[0.04] px-2 py-0.5 text-[11px] text-ink-soft">+{a.connectors.length - 3}</span>
-                )}
-              </div>
-            )}
-            <div className="mt-4 border-t hairline pt-3 text-[12px] text-ink-soft">
-              <div className="flex items-center justify-between">
-                <RiskTag risk={a.risk} />
-                <span>{a.category} · v{a.current_version}</span>
-              </div>
-              <div className="mt-2 flex items-center justify-between">
-                <span className="truncate">
-                  By <span className="text-ink font-medium">{a.owner_name}</span>
-                  {a.is_mine && <span className="ml-1 text-accent">(you)</span>}
-                </span>
-                <span className="shrink-0">{fmtDate(a.created_at)}</span>
-              </div>
-              {multiCompany && <div className="mt-1 truncate">{a.org_name}</div>}
-            </div>
-          </Link>
+          <AgentCard key={a.id} agent={a} multiCompany={multiCompany} />
         ))}
       </div>
 
@@ -170,6 +138,96 @@ export function HubClient({ agents }: { agents: AgentRow[] }) {
           {agents.length === 0
             ? "No agents yet. Create your first agent in the Builder."
             : "No agents match those filters."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgentCard({ agent: a, multiCompany }: { agent: AgentRow; multiCompany: boolean }) {
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function del() {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/agents", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: a.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setErr(data.error || "Could not delete this agent.");
+        setBusy(false);
+        return;
+      }
+      router.refresh();
+    } catch {
+      setErr("Could not delete this agent.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card flex flex-col overflow-hidden hover:shadow-lift hover:-translate-y-0.5 transition-all">
+      <Link href={`/hub/${a.slug}`} className="block p-5 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="grid h-11 w-11 place-items-center rounded-xl bg-paper text-ink text-sm font-semibold border hairline">
+            {a.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
+          </div>
+          <StatusBadge status={a.status} />
+        </div>
+        <h3 className="mt-3 display text-[17px] font-semibold leading-tight">{a.name}</h3>
+        <p className="mt-1.5 text-[13px] text-ink-soft leading-snug line-clamp-2">{a.summary}</p>
+        {a.connectors.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {a.connectors.slice(0, 3).map((c) => (
+              <span key={c} className="rounded-md bg-black/[0.04] px-2 py-0.5 text-[11px] text-ink-soft">{connectorLabel(c)}</span>
+            ))}
+            {a.connectors.length > 3 && (
+              <span className="rounded-md bg-black/[0.04] px-2 py-0.5 text-[11px] text-ink-soft">+{a.connectors.length - 3}</span>
+            )}
+          </div>
+        )}
+        <div className="mt-4 border-t hairline pt-3 text-[12px] text-ink-soft">
+          <div className="flex items-center justify-between">
+            <RiskTag risk={a.risk} />
+            <span>{a.category} · v{a.current_version}</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between">
+            <span className="truncate">
+              By <span className="text-ink font-medium">{a.owner_name}</span>
+              {a.is_mine && <span className="ml-1 text-accent">(you)</span>}
+            </span>
+            <span className="shrink-0">{fmtDate(a.created_at)}</span>
+          </div>
+          {multiCompany && <div className="mt-1 truncate">{a.org_name}</div>}
+        </div>
+      </Link>
+      {a.can_delete && (
+        <div className="border-t hairline px-5 py-2.5">
+          {err && <p className="mb-1.5 text-[12px] text-rust">{err}</p>}
+          {!confirming ? (
+            <button onClick={() => setConfirming(true)} className="text-[12px] text-rust hover:underline">
+              Delete agent
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="text-[12px] text-ink-soft">Delete permanently?</span>
+              <button onClick={del} disabled={busy}
+                className="text-[12px] font-medium text-rust hover:underline disabled:opacity-40">
+                {busy ? "Deleting…" : "Yes, delete"}
+              </button>
+              <button onClick={() => setConfirming(false)} disabled={busy}
+                className="text-[12px] text-ink-soft hover:text-ink disabled:opacity-40">
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

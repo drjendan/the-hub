@@ -16,6 +16,7 @@ export interface AppRow {
   created_at: string;
   owner_name: string;
   org_name: string;
+  can_delete: boolean;
 }
 
 export interface Member {
@@ -139,44 +140,7 @@ export function AppsClient({
       {/* Grid */}
       <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {results.map((a) => (
-          <div key={a.id} className="card p-5 flex flex-col">
-            <div className="flex items-start justify-between gap-2">
-              <div className="grid h-11 w-11 place-items-center rounded-xl bg-paper text-ink text-sm font-semibold border hairline">
-                {a.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
-              </div>
-              <StatusBadge status={a.status} />
-            </div>
-            <h3 className="mt-3 display text-[17px] font-semibold leading-tight">{a.name}</h3>
-            <p className="mt-1.5 text-[13px] text-ink-soft leading-snug line-clamp-2">{a.description || "—"}</p>
-            <div className="mt-4 border-t hairline pt-3 text-[12px] text-ink-soft">
-              <div className="flex items-center justify-between">
-                <span className="truncate">
-                  Owner <span className="text-ink font-medium">{a.owner_name}</span>
-                </span>
-                <span className="shrink-0">{a.category || "—"}</span>
-              </div>
-              <div className="mt-1 flex items-center justify-between">
-                {multiCompany ? <span className="truncate">{a.org_name}</span> : <span />}
-                <span className="shrink-0">{fmtDate(a.created_at)}</span>
-              </div>
-            </div>
-            <div className="mt-4">
-              {a.status === "published" ? (
-                <a
-                  href={a.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full rounded-lg bg-accent px-4 py-2 text-center text-[13px] font-medium text-white hover:bg-accent-deep transition-colors"
-                >
-                  Launch ↗
-                </a>
-              ) : (
-                <div className="rounded-lg border hairline bg-black/[0.02] px-4 py-2 text-center text-[12px] text-ink-soft">
-                  {a.status === "blocked" ? "Blocked in review" : "Awaiting approval to launch"}
-                </div>
-              )}
-            </div>
-          </div>
+          <AppCard key={a.id} app={a} multiCompany={multiCompany} />
         ))}
       </div>
 
@@ -186,6 +150,101 @@ export function AppsClient({
           {apps.length === 0
             ? "No apps yet. Register your first tool above — it goes through governance before it can launch."
             : "No apps match those filters."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AppCard({ app: a, multiCompany }: { app: AppRow; multiCompany: boolean }) {
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function del() {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/apps", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: a.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setErr(data.error || "Could not delete this app.");
+        setBusy(false);
+        return;
+      }
+      router.refresh();
+    } catch {
+      setErr("Could not delete this app.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card p-5 flex flex-col">
+      <div className="flex items-start justify-between gap-2">
+        <div className="grid h-11 w-11 place-items-center rounded-xl bg-paper text-ink text-sm font-semibold border hairline">
+          {a.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
+        </div>
+        <StatusBadge status={a.status} />
+      </div>
+      <h3 className="mt-3 display text-[17px] font-semibold leading-tight">{a.name}</h3>
+      <p className="mt-1.5 text-[13px] text-ink-soft leading-snug line-clamp-2">{a.description || "—"}</p>
+      <div className="mt-4 border-t hairline pt-3 text-[12px] text-ink-soft">
+        <div className="flex items-center justify-between">
+          <span className="truncate">
+            Owner <span className="text-ink font-medium">{a.owner_name}</span>
+          </span>
+          <span className="shrink-0">{a.category || "—"}</span>
+        </div>
+        <div className="mt-1 flex items-center justify-between">
+          {multiCompany ? <span className="truncate">{a.org_name}</span> : <span />}
+          <span className="shrink-0">{fmtDate(a.created_at)}</span>
+        </div>
+      </div>
+      <div className="mt-4">
+        {a.status === "published" ? (
+          <a
+            href={a.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full rounded-lg bg-accent px-4 py-2 text-center text-[13px] font-medium text-white hover:bg-accent-deep transition-colors"
+          >
+            Launch ↗
+          </a>
+        ) : (
+          <div className="rounded-lg border hairline bg-black/[0.02] px-4 py-2 text-center text-[12px] text-ink-soft">
+            {a.status === "blocked" ? "Blocked in review" : "Awaiting approval to launch"}
+          </div>
+        )}
+      </div>
+      {a.can_delete && (
+        <div className="mt-3 border-t hairline pt-3">
+          {err && <p className="mb-2 text-[12px] text-rust">{err}</p>}
+          {!confirming ? (
+            <button
+              onClick={() => setConfirming(true)}
+              className="text-[12px] text-rust hover:underline"
+            >
+              Delete app
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="text-[12px] text-ink-soft">Delete permanently?</span>
+              <button onClick={del} disabled={busy}
+                className="text-[12px] font-medium text-rust hover:underline disabled:opacity-40">
+                {busy ? "Deleting…" : "Yes, delete"}
+              </button>
+              <button onClick={() => setConfirming(false)} disabled={busy}
+                className="text-[12px] text-ink-soft hover:text-ink disabled:opacity-40">
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
