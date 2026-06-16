@@ -25,10 +25,31 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   // Load the agent + its latest system prompt.
   const { data: agent } = await supabase
     .from("agents")
-    .select("id, name")
+    .select("id, name, status")
     .eq("id", params.id)
     .maybeSingle();
   if (!agent) return NextResponse.json({ error: "Agent not found" }, { status: 404 });
+
+  // Governance gate: only published agents may run. Anything still in_review,
+  // blocked, draft, or deprecated must clear approval first — this is what makes
+  // the governance queue actually enforce execution, not just catalog visibility.
+  if (agent.status !== "published") {
+    const reason =
+      agent.status === "in_review"
+        ? "It is awaiting governance approval."
+        : agent.status === "blocked"
+          ? "It was blocked in governance review."
+          : agent.status === "deprecated"
+            ? "It has been deprecated."
+            : "It has not been published yet.";
+    return NextResponse.json(
+      {
+        error: `This agent can't run: ${reason} An agent must be approved and published before it can be executed.`,
+        status: agent.status,
+      },
+      { status: 403 }
+    );
+  }
 
   const { data: ver } = await supabase
     .from("agent_versions")
