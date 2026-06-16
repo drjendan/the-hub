@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
+import { getUser, ensureProfile, getOrgsForUser, getCurrentOrgId } from "@/lib/auth";
 
 const display = Fraunces({
   subsets: ["latin"],
@@ -24,12 +25,35 @@ export const metadata: Metadata = {
   description: "Discover, govern, and deploy AI agents across the enterprise.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Resolve the signed-in user + their workspace for the shell. Guarded so the
+  // login page still renders if Supabase env is not configured yet.
+  let shell: React.ReactNode = null;
+  try {
+    const user = await getUser();
+    if (user) {
+      const profile = await ensureProfile(user);
+      const orgs = await getOrgsForUser();
+      const currentOrgId = await getCurrentOrgId(orgs, profile);
+      shell = (
+        <Sidebar
+          user={{ email: user.email ?? "", fullName: profile.full_name }}
+          role={profile.app_role}
+          orgs={orgs}
+          currentOrgId={currentOrgId}
+          isAdmin={profile.app_role === "admin"}
+        />
+      );
+    }
+  } catch {
+    shell = null;
+  }
+
   return (
     <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
       <body>
         <div className="relative z-10 flex min-h-screen">
-          <Sidebar />
+          {shell}
           <main className="flex-1 min-w-0">{children}</main>
         </div>
       </body>

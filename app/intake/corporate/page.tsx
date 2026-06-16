@@ -13,9 +13,41 @@ export default function CorporateIntake() {
   const [goals, setGoals] = useState<string[]>([]);
   const [compliance, setCompliance] = useState<string[]>([]);
   const [done, setDone] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   const toggle = (arr: string[], set: (v: string[]) => void, v: string) =>
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
+  async function submit() {
+    setErr(null);
+    setSaving(true);
+    try {
+      const res = await fetch("/api/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          intake_type: "corporate",
+          name,
+          industry,
+          size_band: size,
+          data_sensitivity: sensitivity,
+          primary_goals: goals,
+          compliance,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErr(data.error || "Could not save. Are you part of a company?");
+        return;
+      }
+      setDone(true);
+    } catch {
+      setErr("Could not reach the server.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (done) {
     return (
@@ -24,8 +56,7 @@ export default function CorporateIntake() {
           <div className="text-4xl mb-3 text-moss">✓</div>
           <h1 className="display text-[26px] font-semibold">Intake received</h1>
           <p className="mt-2 text-ink-soft text-[14px]">
-            {name || "Your organization"} is set up. Governance mode is configured from your
-            data-sensitivity selection. Next, match a role to agents.
+            Profile saved for {name || "your company"}. Next, match a role to agents.
           </p>
           <a href="/intake/role" className="mt-5 inline-block rounded-lg bg-ink px-5 py-2.5 text-[13px] font-medium text-paper hover:bg-ink-soft transition-colors">
             Match a role →
@@ -41,15 +72,16 @@ export default function CorporateIntake() {
         <div className="mb-1.5 text-[11px] uppercase tracking-[0.16em] text-accent font-semibold">Setup</div>
         <h1 className="display text-[30px] font-semibold leading-none">Corporate intake</h1>
         <p className="mt-2 text-[14px] text-ink-soft">
-          Establish your organization profile. This sets tenant defaults, data
-          residency, and governance posture for every agent.
+          Record your company profile, goals, and compliance needs. This is saved against your
+          current company to inform governance posture. (Companies themselves are created by your
+          provider admin.)
         </p>
       </div>
 
       <div className="mt-6 card p-6 space-y-5">
         <div className="grid sm:grid-cols-2 gap-4">
           <Field label="Organization name">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Northwind Industries"
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Corp"
               className="w-full rounded-lg border hairline bg-white px-3 py-2.5 outline-none focus:border-accent" />
           </Field>
           <Field label="Industry">
@@ -97,9 +129,11 @@ export default function CorporateIntake() {
           {sensitivity === "high" && " High-risk agents will require reviewer approval before publish."}
         </div>
 
-        <button onClick={() => setDone(true)} disabled={!name.trim()}
+        {err && <p className="text-[12px] text-rust">{err}</p>}
+
+        <button onClick={submit} disabled={saving || !name.trim()}
           className="w-full rounded-lg bg-ink py-2.5 text-[14px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
-          Create organization
+          {saving ? "Saving…" : "Save company profile"}
         </button>
       </div>
     </div>

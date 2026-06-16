@@ -133,7 +133,8 @@ create table if not exists public.agents (
   current_version  int not null default 1,
   tags             jsonb not null default '[]'::jsonb,
   capabilities     jsonb not null default '[]'::jsonb,    -- string[]
-  tools            jsonb not null default '[]'::jsonb,    -- string[]
+  tools            jsonb not null default '[]'::jsonb,    -- string[] (internal tools/skills)
+  connectors       jsonb not null default '[]'::jsonb,    -- string[] (connector keys; execution wired later)
   avg_rating       numeric(3,2) default 0,
   deployments      int default 0,
   created_at       timestamptz not null default now(),
@@ -509,5 +510,70 @@ create or replace view public.v_agent_catalog as
   select a.*, p.full_name as owner_name
   from public.agents a
   left join public.profiles p on p.id = a.owner_id;
+
+-- =====================================================================
+-- AUTH INTEGRATION  (added for the live app)
+--   * Auto-create a profiles row whenever a Supabase Auth user is created
+--     (sign-up OR admin invite), so foreign keys resolve without seed data.
+--   * Prevent ordinary users from escalating their own app_role: only the
+--     service role (auth.uid() IS NULL) may change it. The provider/admin is
+--     promoted server-side via the SUPABASE_SERVICE_ROLE_KEY.
+--   * Let users in the same organization read each other's basic profile, so
+--     the Library can display "who created this agent".
+-- =====================================================================
+
+-- Create the profile when an auth user appears.
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, email, full_name)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1))
+  )
+  on conflict (id) do update
+    set email = excluded.email,
+        full_name = coalesce(public.profiles.full_name, excluded.full_name);
+  return new;
+end $$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- Block self-service role escalation. Service-role writes have auth.uid() = NULL
+-- and are allowed (that is how the provider/admin gets promoted).
+create or replace function public.fn_guard_profile_role()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is not null and new.app_role is distinct from old.app_role then
+    new.app_role := old.app_role;   -- silently ignore the attempted change
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists trg_guard_profile_role on public.profiles;
+create trigger trg_guard_profile_role before update on public.profiles
+  for each row execute function public.fn_guard_profile_role();
+
+-- Does the current user share any organization with the target user?
+-- SECURITY DEFINER so it does not recurse through org_members RLS.
+create or replace function public.shares_org(target uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1
+    from public.org_members a
+    join public.org_members b on a.organization_id = b.organization_id
+    where a.user_id = auth.uid() and b.user_id = target
+  );
+$$;
+
+-- Broaden profile SELECT: yourself OR anyone in a shared org (read-only).
+-- The existing p_profiles_self policy still governs writes.
+drop policy if exists p_profiles_read_team on public.profiles;
+create policy p_profiles_read_team on public.profiles
+  for select using (id = auth.uid() or public.shares_org(id));
 
 -- End of schema.sql

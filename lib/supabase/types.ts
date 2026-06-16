@@ -1,6 +1,7 @@
 // Shared domain types — kept in sync with supabase/schema.sql
 
 export type AppRole = "admin" | "builder" | "reviewer" | "member";
+export type OrgRole = "owner" | "manager" | "staff";
 export type AgentStatus = "draft" | "in_review" | "published" | "deprecated" | "blocked";
 export type RiskTier = "low" | "moderate" | "high" | "restricted";
 export type RequestKind = "publish" | "version" | "access" | "decommission" | "policy_exception";
@@ -22,10 +23,21 @@ export interface Agent {
   tags: string[];
   capabilities: string[];
   tools: string[];
+  connectors: string[];
   avg_rating: number;
   deployments: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  industry: string | null;
+  size_band: string | null;
+  governance_mode: string | null;
+  created_at: string;
 }
 
 export interface AgentVersion {

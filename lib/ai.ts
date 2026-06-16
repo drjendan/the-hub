@@ -173,20 +173,41 @@ async function callAnthropic(apiKey: string, args: GenerateJSONArgs): Promise<st
 async function callGoogle(apiKey: string, args: GenerateJSONArgs): Promise<string> {
   const model = modelFor("google");
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: args.system }] },
-      contents: [{ role: "user", parts: [{ text: args.user }] }],
-      generationConfig: {
-        temperature: args.temperature ?? 0.3,
-        maxOutputTokens: args.maxTokens ?? 900,
-        responseMimeType: "application/json",
-      },
-    }),
+
+  const generationConfig: Record<string, unknown> = {
+    temperature: args.temperature ?? 0.3,
+    maxOutputTokens: args.maxTokens ?? 900,
+    responseMimeType: "application/json",
+  };
+  // Gemini 2.5 models "think" by default, which burns the output-token budget
+  // (often leaving no room for the JSON answer). Disable it for deterministic,
+  // fast structured output.
+  if (model.includes("2.5")) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: args.system }] },
+    contents: [{ role: "user", parts: [{ text: args.user }] }],
+    generationConfig,
   });
-  if (!res.ok) throw new Error(`Google ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+
+  // Google's free tier intermittently returns 429/503; retry transient errors.
+  let lastErr = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    }
+    lastErr = `Google ${res.status}: ${await res.text()}`;
+    if ((res.status === 429 || res.status === 500 || res.status === 503) && attempt < 2) {
+      await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+      continue;
+    }
+    throw new Error(lastErr);
+  }
+  throw new Error(lastErr);
 }

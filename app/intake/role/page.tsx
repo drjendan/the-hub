@@ -2,10 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ROLES } from "@/lib/demo-data";
 import type { AgentMatch } from "@/lib/supabase/types";
-
-const STARTERS = ROLES;
 
 export default function RoleMatchPage() {
   const [title, setTitle] = useState("");
@@ -15,16 +12,6 @@ export default function RoleMatchPage() {
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<AgentMatch[] | null>(null);
   const [source, setSource] = useState<string>("");
-
-  function loadStarter(id: string) {
-    const r = STARTERS.find((s) => s.id === id);
-    if (!r) return;
-    setTitle(r.title);
-    setDepartment(r.department ?? "");
-    setResponsibilities(r.responsibilities.join("\n"));
-    setTools(r.tools_used.join(", "));
-    setMatches(null);
-  }
 
   async function run() {
     setLoading(true);
@@ -65,18 +52,6 @@ export default function RoleMatchPage() {
       <div className="mt-6 grid lg:grid-cols-2 gap-6">
         {/* Form */}
         <div className="card p-5">
-          <div className="mb-4">
-            <div className="text-[12px] text-ink-soft mb-1.5">Start from a saved role</div>
-            <div className="flex flex-wrap gap-2">
-              {STARTERS.map((r) => (
-                <button key={r.id} onClick={() => loadStarter(r.id)}
-                  className="rounded-full border hairline bg-white px-3 py-1 text-[12px] hover:border-accent hover:text-accent transition-colors">
-                  {r.title}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <Field label="Role title">
             <input value={title} onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Accounts Payable Specialist"

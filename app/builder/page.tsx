@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { StatusBadge, RiskTag } from "@/components/ui";
+import { CONNECTORS, connectorLabel } from "@/lib/connectors";
 import type { RiskTier } from "@/lib/supabase/types";
-
-const TOOL_OPTIONS = ["NetSuite", "Zendesk", "Slack", "Greenhouse", "Drive", "Email", "CRM", "Web"];
 
 interface ProviderInfo {
   provider: "openai" | "anthropic" | "google";
@@ -25,6 +25,7 @@ interface Suggestion {
 }
 
 export default function BuilderPage() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [category, setCategory] = useState("Finance");
   const [summary, setSummary] = useState("");
@@ -32,8 +33,12 @@ export default function BuilderPage() {
   const [model, setModel] = useState("gpt-4o-mini");
   const [temp, setTemp] = useState(0.3);
   const [risk, setRisk] = useState<RiskTier>("low");
-  const [tools, setTools] = useState<string[]>([]);
-  const [submitted, setSubmitted] = useState(false);
+  const [connectors, setConnectors] = useState<string[]>([]);
+  const [capabilities, setCapabilities] = useState<string[]>([]);
+
+  // Save state
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
 
   // AI assist
   const [brief, setBrief] = useState("");
@@ -54,8 +59,8 @@ export default function BuilderPage() {
   }, []);
 
   const requiresReview = risk === "high" || risk === "restricted";
-  const toggleTool = (t: string) =>
-    setTools((arr) => (arr.includes(t) ? arr.filter((x) => x !== t) : [...arr, t]));
+  const toggleConnector = (key: string) =>
+    setConnectors((arr) => (arr.includes(key) ? arr.filter((x) => x !== key) : [...arr, key]));
 
   async function suggestWithAI() {
     setAiError(null);
@@ -78,8 +83,10 @@ export default function BuilderPage() {
       if (s.summary) setSummary(s.summary);
       if (s.system_prompt) setPrompt(s.system_prompt);
       if (s.risk) setRisk(s.risk);
+      if (Array.isArray(s.capabilities)) setCapabilities(s.capabilities);
       if (Array.isArray(s.tools)) {
-        setTools(s.tools.map((t) => matchTool(t)).filter(Boolean) as string[]);
+        const keys = s.tools.map(matchConnector).filter(Boolean) as string[];
+        setConnectors(Array.from(new Set(keys)));
       }
       const providerLabel =
         providers.find((p) => p.provider === data.source)?.label || data.source;
@@ -91,6 +98,39 @@ export default function BuilderPage() {
     }
   }
 
+  async function save() {
+    setSaveErr(null);
+    setSaving(true);
+    try {
+      const res = await fetch("/api/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          category,
+          summary,
+          system_prompt: prompt,
+          model,
+          temperature: temp,
+          risk,
+          connectors,
+          capabilities,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSaveErr(data.error || "Could not save the agent.");
+        return;
+      }
+      router.push(`/hub/${data.slug}`);
+      router.refresh();
+    } catch {
+      setSaveErr("Could not reach the server.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const noProvider = providers.length > 0 && !active;
 
   return (
@@ -99,17 +139,15 @@ export default function BuilderPage() {
         <div className="mb-1.5 text-[11px] uppercase tracking-[0.16em] text-accent font-semibold">Builder</div>
         <h1 className="display text-[30px] font-semibold leading-none">Create an agent</h1>
         <p className="mt-2 max-w-xl text-[14px] text-ink-soft">
-          Define behavior, model, and connected tools — or let AI draft a starting
-          point. High-risk agents route to the governance queue instead of publishing directly.
+          Define behavior, model, and connectors — or let AI draft a starting point. High-risk
+          agents route to the governance queue instead of publishing directly.
         </p>
       </div>
 
       {/* AI assist bar */}
       <div className="mt-6 card p-5">
         <div className="flex items-center justify-between gap-3 mb-3">
-          <div className="text-[11px] uppercase tracking-[0.12em] text-accent font-semibold">
-            Suggest with AI
-          </div>
+          <div className="text-[11px] uppercase tracking-[0.12em] text-accent font-semibold">Suggest with AI</div>
           <span className="text-[11px] mono text-ink-soft">
             {active
               ? `Connected · ${providers.find((p) => p.provider === active)?.label}`
@@ -133,8 +171,8 @@ export default function BuilderPage() {
         </div>
         {noProvider && (
           <p className="mt-2 text-[12px] text-rust">
-            No AI provider is configured. Add an OpenAI, Anthropic, or Google API key
-            to the deployment environment to enable suggestions.
+            No AI provider is configured. Add an OpenAI, Anthropic, or Google API key to the
+            environment to enable suggestions.
           </p>
         )}
         {aiError && <p className="mt-2 text-[12px] text-rust">{aiError}</p>}
@@ -187,17 +225,20 @@ export default function BuilderPage() {
             </Field>
           </div>
 
-          <Field label="Connected tools">
+          <Field label="Connectors">
             <div className="flex flex-wrap gap-2">
-              {TOOL_OPTIONS.map((t) => (
-                <button key={t} onClick={() => toggleTool(t)}
+              {CONNECTORS.map((c) => (
+                <button key={c.key} type="button" onClick={() => toggleConnector(c.key)}
                   className={`rounded-full border px-3 py-1.5 text-[12px] transition-colors ${
-                    tools.includes(t) ? "border-accent bg-accent/[0.08] text-accent-deep" : "hairline bg-white text-ink-soft hover:border-ink-soft"
+                    connectors.includes(c.key) ? "border-accent bg-accent/[0.08] text-accent-deep" : "hairline bg-white text-ink-soft hover:border-ink-soft"
                   }`}>
-                  {t}
+                  {c.label}
                 </button>
               ))}
             </div>
+            <p className="mt-2 text-[11px] text-ink-soft">
+              Connectors are stored with the agent. Actual execution is wired up later.
+            </p>
           </Field>
         </div>
 
@@ -217,31 +258,27 @@ export default function BuilderPage() {
               <RiskTag risk={risk} />
               <span className="text-ink-soft mono">{model} · {temp.toFixed(1)}</span>
             </div>
-            {tools.length > 0 && (
+            {connectors.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
-                {tools.map((t) => <span key={t} className="rounded-md border hairline px-2 py-0.5 text-[11px]">{t}</span>)}
+                {connectors.map((c) => <span key={c} className="rounded-md border hairline px-2 py-0.5 text-[11px]">{connectorLabel(c)}</span>)}
               </div>
             )}
           </div>
 
-          <div className={`rounded-xl border p-4 text-[13px] ${requiresReview ? "border-gold/40 bg-gold/[0.06]" : "hairline bg-bg-2"}`}>
+          <div className={`rounded-xl border p-4 text-[13px] ${requiresReview ? "border-gold/40 bg-gold/[0.06]" : "hairline bg-white"}`}>
             {requiresReview ? (
               <><strong className="text-gold">Routes to governance.</strong> {risk} risk agents require a reviewer decision before they can be published.</>
             ) : (
-              <><strong className="text-moss">Direct publish allowed.</strong> Low/moderate risk agents can be published without review under standard governance.</>
+              <><strong className="text-moss">Direct publish allowed.</strong> Low/moderate risk agents publish without review under standard governance.</>
             )}
           </div>
 
-          <button onClick={() => setSubmitted(true)} disabled={!name.trim()}
-            className="w-full rounded-lg bg-ink py-2.5 text-[14px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
-            {requiresReview ? "Submit for review" : "Save & publish"}
-          </button>
+          {saveErr && <p className="text-[12px] text-rust">{saveErr}</p>}
 
-          {submitted && (
-            <div className="rounded-xl border border-moss/30 bg-moss/[0.07] p-3 text-[13px] text-moss rise">
-              ✓ {requiresReview ? "Submitted to the governance queue." : "Saved as draft (v1)."} A new version snapshot and audit entry were recorded.
-            </div>
-          )}
+          <button onClick={save} disabled={saving || !name.trim()}
+            className="w-full rounded-lg bg-ink py-2.5 text-[14px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
+            {saving ? "Saving…" : requiresReview ? "Submit for review" : "Save & publish"}
+          </button>
         </div>
       </div>
     </div>
@@ -265,9 +302,11 @@ function matchCategory(c: string): string {
   return opts.find((o) => o.toLowerCase() === lc) || opts.find((o) => lc.includes(o.toLowerCase())) || "Operations";
 }
 
-// Map a suggested tool onto a known chip when possible.
-function matchTool(t: string): string {
+// Map a suggested tool/integration name onto a known connector key.
+function matchConnector(t: string): string {
   const lc = t.toLowerCase();
-  const hit = TOOL_OPTIONS.find((o) => o.toLowerCase() === lc || lc.includes(o.toLowerCase()));
-  return hit || "";
+  const hit = CONNECTORS.find(
+    (c) => c.label.toLowerCase() === lc || lc.includes(c.label.toLowerCase()) || lc.includes(c.key.replace(/_/g, " "))
+  );
+  return hit?.key || "";
 }

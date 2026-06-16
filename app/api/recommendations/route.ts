@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { AGENTS } from "@/lib/demo-data";
 import { resolveProvider, generateJSON } from "@/lib/ai";
+import { getUser, getCurrentOrgId } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { connectorLabel } from "@/lib/connectors";
 import type { AgentMatch, RoleProfileInput } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
@@ -8,14 +10,17 @@ export const runtime = "nodejs";
 /**
  * POST /api/recommendations
  * Body: RoleProfileInput (+ optional { provider })
- *   -> { matches: AgentMatch[], source: "openai" | "anthropic" | "google" | "heuristic" }
+ *   -> { matches: AgentMatch[], source: provider | "heuristic" }
  *
- * Uses whichever AI provider is configured (ChatGPT / Claude / Gemini) via the
- * shared lib/ai layer. Sends only the role profile and a compact catalog — no
- * session transcripts or user history. Falls back to a transparent local
- * heuristic when no API key is present or the call fails.
+ * Ranks the caller's live published/in-review agents (RLS-scoped to their
+ * current company) against a role profile. Uses whichever AI provider is
+ * configured; falls back to a transparent local heuristic. Sends only the role
+ * profile and a compact catalog — no session transcripts or user history.
  */
 export async function POST(req: Request) {
+  const user = await getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   let body: RoleProfileInput & { provider?: string };
   try {
     body = (await req.json()) as RoleProfileInput & { provider?: string };
@@ -26,16 +31,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "title is required" }, { status: 400 });
   }
 
-  const catalog = AGENTS.filter(
-    (a) => a.status === "published" || a.status === "in_review"
-  ).map((a) => ({
-    agent_id: a.id,
-    agent_name: a.name,
-    category: a.category,
-    summary: a.summary,
-    capabilities: a.capabilities,
-    tools: a.tools,
-  }));
+  const orgId = await getCurrentOrgId();
+  const supabase = createClient();
+
+  let catalog: Array<Record<string, unknown>> = [];
+  if (orgId) {
+    const { data } = await supabase
+      .from("agents")
+      .select("id, name, category, summary, capabilities, connectors")
+      .eq("organization_id", orgId)
+      .in("status", ["published", "in_review"]);
+    catalog = (data || []).map((a) => ({
+      agent_id: a.id,
+      agent_name: a.name,
+      category: a.category,
+      summary: a.summary,
+      capabilities: Array.isArray(a.capabilities) ? a.capabilities : [],
+      tools: (Array.isArray(a.connectors) ? a.connectors : []).map((c: string) => connectorLabel(c)),
+    }));
+  }
+
+  if (catalog.length === 0) {
+    return NextResponse.json({ matches: [], source: "heuristic" });
+  }
 
   const provider = resolveProvider(body.provider);
   if (provider) {
@@ -46,12 +64,12 @@ export async function POST(req: Request) {
         '{"matches":[{"agent_id":string,"agent_name":string,"match_score":number(0..1),"rationale":string}]}. ' +
         "Include only agents with a plausible fit (score >= 0.4), highest first, max 4. " +
         "Keep each rationale to one concise sentence.";
-      const user = JSON.stringify({ role: body, catalog });
+      const userMsg = JSON.stringify({ role: body, catalog });
 
       const parsed = await generateJSON<{ matches?: AgentMatch[] }>({
         provider,
         system,
-        user,
+        user: userMsg,
         temperature: 0.2,
       });
       const matches = (Array.isArray(parsed.matches) ? parsed.matches : [])
