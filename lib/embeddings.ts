@@ -4,7 +4,7 @@ import { getOrgProviderKey, getOrgKeyForProvider } from "@/lib/provider-keys";
 /**
  * Text embeddings for RAG, provider-agnostic at a fixed 768 dimensions (matches
  * the vector(768) column in supabase/rag.sql):
- *   - Google  text-embedding-004           → 768 native
+ *   - Google  gemini-embedding-001 (768)    → reduced via `outputDimensionality`
  *   - OpenAI  text-embedding-3-small (768)  → reduced via the `dimensions` param
  * Anthropic has no embeddings API, so a Claude-only company falls back to an
  * embedding-capable key (its own Gemini/OpenAI key, else the platform key).
@@ -18,7 +18,7 @@ import { getOrgProviderKey, getOrgKeyForProvider } from "@/lib/provider-keys";
  */
 export const EMBED_DIM = 768;
 const OPENAI_MODEL = "text-embedding-3-small";
-const GOOGLE_MODEL = "text-embedding-004";
+const GOOGLE_MODEL = "gemini-embedding-001";
 
 type Embedder = { provider: "openai" | "google"; key: string };
 
@@ -69,15 +69,23 @@ async function embedOpenAI(key: string, texts: string[]): Promise<number[][]> {
 }
 
 async function embedGoogle(key: string, texts: string[]): Promise<number[][]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_MODEL}:batchEmbedContents?key=${key}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      requests: texts.map((t) => ({ model: `models/${GOOGLE_MODEL}`, content: { parts: [{ text: t }] } })),
-    }),
-  });
-  if (!res.ok) throw new Error(`Google embeddings ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  return (data.embeddings as { values: number[] }[]).map((e) => e.values);
+  // gemini-embedding-001 exposes a synchronous single-text method (embedContent),
+  // not a synchronous batch — so embed one text at a time.
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_MODEL}:embedContent?key=${key}`;
+  const out: number[][] = [];
+  for (const text of texts) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: `models/${GOOGLE_MODEL}`,
+        content: { parts: [{ text }] },
+        outputDimensionality: EMBED_DIM,
+      }),
+    });
+    if (!res.ok) throw new Error(`Google embeddings ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    out.push(data.embedding.values as number[]);
+  }
+  return out;
 }
