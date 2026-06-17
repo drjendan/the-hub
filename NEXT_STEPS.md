@@ -92,6 +92,15 @@ that **take action**:
   to build* (e.g. "Resume Screener"), each with a **"Build this"** action that
   opens the Builder pre-filled.
 
+### E. Audio/video recordings as agent input (future phase)
+- The generic run path now takes pasted text + uploaded **.txt/.md/PDF** (PDF text
+  extracted server-side via `unpdf`). **Audio/video recordings** (meeting calls,
+  voice memos) are a separate later phase: they require **speech-to-text
+  transcription** (e.g. Whisper / a hosted STT API) to turn the recording into a
+  transcript, which then feeds the same run flow. Considerations: large file
+  handling/streaming (well beyond the 4 MB request cap — needs direct-to-Storage
+  upload + async processing), transcription cost/latency, and diarization.
+
 ---
 
 ## Rough sequencing (suggested)

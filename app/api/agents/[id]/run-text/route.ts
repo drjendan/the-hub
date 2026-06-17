@@ -6,29 +6,84 @@ import { getOrgProviderKey } from "@/lib/provider-keys";
 
 export const runtime = "nodejs";
 
-const MAX_INPUT = 12000;
+const MAX_FILE_BYTES = 4 * 1024 * 1024; // 4 MB — under Vercel's ~4.5MB body cap
+const MAX_TEXT = 20000; // chars actually sent to the model
+
+type Source = "pasted" | "txt" | "pdf";
+
+/** Read text out of an uploaded file (.txt/.md decoded; .pdf extracted via unpdf). */
+async function extractFromFile(file: File): Promise<{ text: string; source: Source } | { error: string }> {
+  if (file.size > MAX_FILE_BYTES) return { error: "File is too large (max 4 MB)." };
+
+  const name = file.name.toLowerCase();
+  const type = file.type;
+
+  if (type.startsWith("text/") || name.endsWith(".txt") || name.endsWith(".md")) {
+    return { text: await file.text(), source: "txt" };
+  }
+
+  if (type === "application/pdf" || name.endsWith(".pdf")) {
+    try {
+      // Lazy import so pdf.js only loads when a PDF is actually uploaded.
+      const { extractText, getDocumentProxy } = await import("unpdf");
+      const buf = new Uint8Array(await file.arrayBuffer());
+      const pdf = await getDocumentProxy(buf);
+      // mergePages joins all pages into one string.
+      const { text } = await extractText(pdf, { mergePages: true });
+      return { text, source: "pdf" };
+    } catch (err) {
+      return { error: `Could not read the PDF: ${(err as Error).message}` };
+    }
+  }
+
+  return { error: "Unsupported file type. Upload a .txt, .md, or PDF file." };
+}
 
 /**
- * POST /api/agents/:id/run-text   Body: { input }
- * Generic text-in / text-out run for connector-less agents: feeds the user's
- * text to the agent's system prompt via the AI layer (tenant BYOK key first,
- * platform key fallback) and returns the output. Respects the governance gate
- * (published only) and persists the run to agent_runs.
+ * POST /api/agents/:id/run-text   (multipart form: `input` text and/or `file`)
+ * Generic run for connector-less agents. Accepts pasted text OR an uploaded
+ * .txt/.md/PDF (text extracted server-side), feeds it to the agent's system
+ * prompt via the AI layer (tenant BYOK key first, platform fallback), persists
+ * the run, and returns the output. Governance-gated (published agents only).
  */
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { input?: unknown };
+  let form: FormData;
   try {
-    body = await _req.json();
+    form = await req.formData();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json({ error: "Expected form data." }, { status: 400 });
   }
-  const input = typeof body.input === "string" ? body.input.trim() : "";
-  if (!input) return NextResponse.json({ error: "Enter some text to run the agent on." }, { status: 400 });
-  if (input.length > MAX_INPUT) {
-    return NextResponse.json({ error: `Input is too long (max ~${MAX_INPUT} characters).` }, { status: 400 });
+
+  const file = form.get("file");
+  const pasted = typeof form.get("input") === "string" ? (form.get("input") as string).trim() : "";
+
+  let inputText = "";
+  let source: Source = "pasted";
+  let fileName = "";
+  if (file instanceof File && file.size > 0) {
+    const res = await extractFromFile(file);
+    if ("error" in res) return NextResponse.json({ error: res.error }, { status: 400 });
+    inputText = res.text.trim();
+    source = res.source;
+    fileName = file.name;
+    if (!inputText) {
+      return NextResponse.json({ error: "No readable text found in that file." }, { status: 400 });
+    }
+  } else {
+    inputText = pasted;
+  }
+
+  if (!inputText) {
+    return NextResponse.json({ error: "Enter text or upload a file to run the agent on." }, { status: 400 });
+  }
+
+  let truncated = false;
+  if (inputText.length > MAX_TEXT) {
+    inputText = inputText.slice(0, MAX_TEXT);
+    truncated = true;
   }
 
   const supabase = createClient();
@@ -40,7 +95,6 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     .maybeSingle();
   if (!agent) return NextResponse.json({ error: "Agent not found" }, { status: 404 });
 
-  // Governance gate — only published agents may run (same rule as the Gmail run).
   if (agent.status !== "published") {
     return NextResponse.json(
       { error: "This agent isn't published yet. It must be approved and published before it can run." },
@@ -57,7 +111,6 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     .maybeSingle();
   const systemPrompt = ver?.system_prompt || "You are a helpful assistant. Process the user's input.";
 
-  // Credential: tenant BYO key first (bills to them), platform key as fallback.
   let provider: AIProvider;
   let apiKeyOverride: string | undefined;
   let modelOverride: string | undefined;
@@ -84,12 +137,11 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       apiKey: apiKeyOverride,
       model: modelOverride,
       system: systemPrompt,
-      user: input,
+      user: inputText,
       temperature: 0.3,
-      maxTokens: 1200,
+      maxTokens: 1500,
     });
   } catch (err) {
-    // Don't surface the provider's raw error body (it can echo a masked key).
     const code = (err as Error).message.match(/\b(\d{3})\b/)?.[1];
     return NextResponse.json(
       {
@@ -103,16 +155,17 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   if (!output) output = "(The model returned no text.)";
 
-  // Persist the run (best-effort — if agent_runs.sql hasn't been applied yet,
-  // the run still succeeds; the insert simply no-ops on error).
+  // Persist (best-effort — runs still work before agent_runs.sql is applied).
+  const label = source === "pasted" ? "pasted text" : `${fileName} (${source})`;
   await supabase.from("agent_runs").insert({
     organization_id: agent.organization_id,
     agent_id: agent.id,
     user_id: user.id,
     kind: "text",
-    input,
+    source,
+    input: `${label}${truncated ? " · truncated" : ""}\n${inputText.slice(0, 500)}`,
     output,
   });
 
-  return NextResponse.json({ output });
+  return NextResponse.json({ output, source, truncated });
 }

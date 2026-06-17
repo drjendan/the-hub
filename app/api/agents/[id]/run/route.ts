@@ -167,6 +167,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     agent_id: agent.id,
     user_id: user.id,
     kind: "gmail",
+    source: "gmail",
     input: `Inbox scan (${messages.length} message${messages.length === 1 ? "" : "s"})`,
     output: JSON.stringify(results),
   });
