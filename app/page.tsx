@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, ensureProfile, getOrgsForUser, getCurrentOrgId } from "@/lib/auth";
 import { StatTile, StatusBadge, RiskTag } from "@/components/ui";
+import { MissionBanner } from "./mission-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +72,20 @@ export default async function DashboardPage() {
   const inReview = agents.filter((a) => a.status === "in_review").length;
   const restricted = agents.filter((a) => a.risk === "restricted").length;
   const currentOrg = orgs.find((o) => o.id === orgId);
+  const canEditMission = profile.app_role === "admin" || currentOrg?.org_role === "owner";
+
+  // Mission statement — resilient: stays null if mission.sql hasn't been run yet.
+  let mission: string | null = null;
+  {
+    const { data: orgRow, error: missionErr } = await supabase
+      .from("organizations")
+      .select("mission_statement")
+      .eq("id", orgId)
+      .maybeSingle();
+    if (!missionErr && orgRow) {
+      mission = (orgRow as { mission_statement: string | null }).mission_statement ?? null;
+    }
+  }
 
   return (
     <div className="px-6 sm:px-10 py-8 max-w-6xl mx-auto">
@@ -84,6 +99,8 @@ export default async function DashboardPage() {
           + New agent
         </Link>
       </div>
+
+      <MissionBanner orgId={orgId} initialMission={mission} canEdit={!!canEditMission} />
 
       <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile label="Total agents" value={String(agents.length)} hint="in this company" delay="rise-1" />
