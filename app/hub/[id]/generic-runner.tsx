@@ -6,19 +6,39 @@ import { useState } from "react";
  * Generic runner for connector-less published agents. Two inputs: pasted text
  * OR an uploaded .txt/.md/PDF (≤4 MB). Posts multipart to /run-text.
  */
-export function GenericRunner({ agentId }: { agentId: string }) {
+export function GenericRunner({ agentId, canReview }: { agentId: string; canReview: boolean }) {
   const [input, setInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [output, setOutput] = useState<string | null>(null);
   const [sources, setSources] = useState<string[]>([]);
+  const [confidence, setConfidence] = useState<number | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<"accurate" | "hallucinated" | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+
+  async function rate(v: "accurate" | "hallucinated") {
+    if (!runId) return;
+    setVerdict(v);
+    try {
+      await fetch(`/api/runs/${runId}/feedback`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ verdict: v }),
+      });
+    } catch {
+      setVerdict(null);
+    }
+  }
 
   async function run() {
     setError(null);
     setOutput(null);
     setSources([]);
+    setConfidence(null);
+    setRunId(null);
+    setVerdict(null);
     setNote(null);
     setRunning(true);
     try {
@@ -33,6 +53,8 @@ export function GenericRunner({ agentId }: { agentId: string }) {
       }
       setOutput(data.output ?? "");
       setSources(Array.isArray(data.sources) ? data.sources : []);
+      setConfidence(typeof data.confidence === "number" ? data.confidence : null);
+      setRunId(typeof data.run_id === "string" ? data.run_id : null);
       if (data.truncated) setNote("Input was long — it was truncated before running.");
     } catch {
       setError("Could not reach the server.");
@@ -107,6 +129,28 @@ export function GenericRunner({ agentId }: { agentId: string }) {
               {sources.map((s) => (
                 <span key={s} className="rounded-md bg-accent/10 px-2 py-0.5 text-accent">{s}</span>
               ))}
+            </div>
+          )}
+          {(confidence !== null || (canReview && runId)) && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t hairline pt-3">
+              {confidence !== null && (
+                <span className="text-[12px] text-ink-soft" title="Self-reported by the model — a soft signal, not a guarantee.">
+                  Model confidence: <span className="font-medium text-ink">{Math.round(confidence * 100)}%</span>
+                </span>
+              )}
+              {canReview && runId && (
+                verdict ? (
+                  <span className={`text-[12px] font-medium ${verdict === "accurate" ? "text-moss" : "text-rust"}`}>
+                    Marked {verdict}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-3 text-[12px]">
+                    <span className="text-ink-soft">Review:</span>
+                    <button onClick={() => rate("accurate")} className="text-moss hover:underline">👍 Accurate</button>
+                    <button onClick={() => rate("hallucinated")} className="text-rust hover:underline">👎 Hallucinated</button>
+                  </span>
+                )
+              )}
             </div>
           )}
         </div>

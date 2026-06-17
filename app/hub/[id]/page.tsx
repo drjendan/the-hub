@@ -75,6 +75,7 @@ export default async function AgentProfile({ params }: { params: { id: string } 
   const profile = user ? await ensureProfile(user) : null;
   const canManage = profile?.app_role === "admin" || profile?.app_role === "builder";
   const canDelete = canManage || (!!user && agent.owner_id === user.id);
+  const canReview = profile?.app_role === "admin" || profile?.app_role === "reviewer";
 
   // Access management (owner / global admin / company owner). agent.visibility is
   // present once agent_access.sql is applied; absent → treat as 'everyone'.
@@ -145,7 +146,7 @@ export default async function AgentProfile({ params }: { params: { id: string } 
               />
             )
           ) : isPublished ? (
-            <GenericRunner agentId={agent.id} />
+            <GenericRunner agentId={agent.id} canReview={canReview} />
           ) : (
             <section className="card p-5 text-[13px] text-ink-soft">
               This agent must be published before it can be run.

@@ -29,13 +29,15 @@ export default async function AnalyticsPage() {
   since.setDate(since.getDate() - 13);
   since.setHours(0, 0, 0, 0);
 
-  const [{ data: agentRows }, { data: events }] = await Promise.all([
-    supabase.from("agents").select("status, risk, category").eq("organization_id", orgId),
+  const [{ data: agentRows }, { data: events }, { data: runRows }] = await Promise.all([
+    supabase.from("agents").select("id, name, status, risk, category").eq("organization_id", orgId),
     supabase
       .from("analytics_events")
       .select("created_at")
       .eq("organization_id", orgId)
       .gte("created_at", since.toISOString()),
+    // agent_runs may not exist yet (agent_runs.sql not run) — resilient to null.
+    supabase.from("agent_runs").select("agent_id, confidence, accurate, hallucinated").eq("organization_id", orgId),
   ]);
 
   const agents = agentRows || [];
@@ -64,6 +66,36 @@ export default async function AnalyticsPage() {
   }
   const peak = Math.max(...days, 1);
   const totalEvents = days.reduce((a, b) => a + b, 0);
+
+  // ---- Trust & quality (from agent_runs) ----
+  const runs = runRows || [];
+  const totalRuns = runs.length;
+  const confVals = runs.map((r) => r.confidence).filter((c): c is number => typeof c === "number");
+  const avgConfidence = confVals.length ? confVals.reduce((a, b) => a + b, 0) / confVals.length : null;
+  const ratedRuns = runs.filter((r) => r.accurate !== null || r.hallucinated !== null);
+  const hallucinatedRuns = runs.filter((r) => r.hallucinated === true);
+  const hallucinationRate = ratedRuns.length ? hallucinatedRuns.length / ratedRuns.length : null;
+
+  const agentName = new Map(agents.map((a) => [a.id, a.name]));
+  const byAgent = new Map<string, { runs: number; conf: number[]; rated: number; hall: number }>();
+  for (const r of runs) {
+    const k = r.agent_id as string;
+    const cur = byAgent.get(k) || { runs: 0, conf: [], rated: 0, hall: 0 };
+    cur.runs++;
+    if (typeof r.confidence === "number") cur.conf.push(r.confidence);
+    if (r.accurate !== null || r.hallucinated !== null) cur.rated++;
+    if (r.hallucinated === true) cur.hall++;
+    byAgent.set(k, cur);
+  }
+  const agentTrust = [...byAgent.entries()]
+    .map(([id, v]) => ({
+      name: agentName.get(id) || "Unknown agent",
+      runs: v.runs,
+      avgConf: v.conf.length ? v.conf.reduce((a, b) => a + b, 0) / v.conf.length : null,
+      hallRate: v.rated ? v.hall / v.rated : null,
+      rated: v.rated,
+    }))
+    .sort((a, b) => b.runs - a.runs);
 
   return (
     <div className="px-6 sm:px-10 py-8 max-w-6xl mx-auto">
@@ -142,6 +174,59 @@ export default async function AnalyticsPage() {
           </div>
         )}
       </div>
+
+      {/* Trust & quality */}
+      <div className="mt-6 card p-5">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="display text-[18px] font-semibold">Trust &amp; quality</h2>
+          <span className="text-[12px] text-ink-soft">{totalRuns} run{totalRuns === 1 ? "" : "s"} recorded</span>
+        </div>
+        <p className="text-[12px] text-ink-soft mb-4">
+          Confidence is self-reported by the model (a soft signal). Hallucination rate is based on reviewer
+          feedback — these help us <span className="font-medium">minimize and monitor</span> hallucinations, not eliminate them.
+        </p>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
+          <MiniStat label="Total runs" value={String(totalRuns)} />
+          <MiniStat label="Avg confidence" value={avgConfidence !== null ? `${Math.round(avgConfidence * 100)}%` : "—"} />
+          <MiniStat label="Hallucination rate" value={hallucinationRate !== null ? `${Math.round(hallucinationRate * 100)}%` : "—"} sub={`${ratedRuns.length} rated`} />
+        </div>
+
+        {agentTrust.length === 0 ? (
+          <p className="text-[13px] text-ink-soft">
+            No runs recorded yet. Run a text agent (and run agent_runs.sql) to start collecting trust signals.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 px-3 text-[11px] uppercase tracking-wide text-ink-soft/70">
+              <span className="flex-1">Agent</span>
+              <span className="w-14 text-right">Runs</span>
+              <span className="w-20 text-right">Avg conf.</span>
+              <span className="w-28 text-right">Halluc. rate</span>
+            </div>
+            {agentTrust.map((a) => (
+              <div key={a.name} className="flex items-center gap-3 rounded-lg border hairline px-3 py-2 text-[13px]">
+                <span className="flex-1 truncate font-medium">{a.name}</span>
+                <span className="w-14 text-right tabular-nums">{a.runs}</span>
+                <span className="w-20 text-right tabular-nums">{a.avgConf !== null ? `${Math.round(a.avgConf * 100)}%` : "—"}</span>
+                <span className={`w-28 text-right tabular-nums ${a.hallRate !== null && a.hallRate > 0 ? "text-rust" : "text-ink-soft"}`}>
+                  {a.hallRate !== null ? `${Math.round(a.hallRate * 100)}% (${a.rated})` : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-lg border hairline bg-white p-3">
+      <div className="text-[10px] uppercase tracking-[0.12em] text-ink-soft">{label}</div>
+      <div className="mt-1 text-[22px] font-semibold leading-none tabular-nums">{value}</div>
+      {sub && <div className="mt-1 text-[11px] text-ink-soft">{sub}</div>}
     </div>
   );
 }

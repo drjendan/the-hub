@@ -10,6 +10,14 @@ export const runtime = "nodejs";
 const MAX_FILE_BYTES = 4 * 1024 * 1024; // 4 MB — under Vercel's ~4.5MB body cap
 const MAX_TEXT = 20000; // chars actually sent to the model
 
+// Self-reported confidence — appended to the prompt, parsed back out, stripped
+// from the shown answer. Weakly calibrated (a model rating itself), surfaced as a
+// soft signal + review trigger, not ground truth.
+const CONFIDENCE_INSTRUCTION =
+  '\n\nAfter your response, on a final line by itself, write "CONFIDENCE: N" where N ' +
+  "is an integer from 0 to 100 indicating how confident you are that your answer is " +
+  "accurate and grounded in any provided context.";
+
 type Source = "pasted" | "txt" | "pdf";
 
 /** Read text out of an uploaded file (.txt/.md decoded; .pdf extracted via unpdf). */
@@ -164,7 +172,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       provider,
       apiKey: apiKeyOverride,
       model: modelOverride,
-      system: groundedSystem,
+      system: groundedSystem + CONFIDENCE_INSTRUCTION,
       user: inputText,
       temperature: 0.3,
       maxTokens: 1500,
@@ -181,20 +189,39 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     );
   }
 
+  // Parse + strip the self-reported confidence line.
+  let confidence: number | null = null;
+  const cm = output.match(/CONFIDENCE:\s*(\d{1,3})/i);
+  if (cm) {
+    confidence = Math.max(0, Math.min(1, parseInt(cm[1], 10) / 100));
+    output = output.replace(/\n*\s*CONFIDENCE:\s*\d{1,3}[.\s]*$/i, "").trim();
+  }
   if (!output) output = "(The model returned no text.)";
 
   // Persist (best-effort — runs still work before agent_runs.sql is applied).
   const label = source === "pasted" ? "pasted text" : `${fileName} (${source})`;
-  await supabase.from("agent_runs").insert({
-    organization_id: agent.organization_id,
-    agent_id: agent.id,
-    user_id: user.id,
-    kind: "text",
-    source,
-    input: `${label}${truncated ? " · truncated" : ""}\n${inputText.slice(0, 500)}`,
-    output,
-    citations: groundingSources.length ? groundingSources : null,
-  });
+  const { data: runRow } = await supabase
+    .from("agent_runs")
+    .insert({
+      organization_id: agent.organization_id,
+      agent_id: agent.id,
+      user_id: user.id,
+      kind: "text",
+      source,
+      input: `${label}${truncated ? " · truncated" : ""}\n${inputText.slice(0, 500)}`,
+      output,
+      confidence,
+      citations: groundingSources.length ? groundingSources : null,
+    })
+    .select("id")
+    .single();
 
-  return NextResponse.json({ output, source, truncated, sources: groundingSources });
+  return NextResponse.json({
+    output,
+    source,
+    truncated,
+    sources: groundingSources,
+    confidence,
+    run_id: runRow?.id ?? null,
+  });
 }
