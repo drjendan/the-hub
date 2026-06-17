@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUser, getCurrentOrgId, getOrgsForUser, ensureProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,16 @@ function isHttpUrl(u: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** The richer profile fields from a request body (best-effort columns). */
+function profilePatch(body: Record<string, unknown>) {
+  return {
+    primary_users: typeof body.primary_users === "string" ? body.primary_users : null,
+    key_features: typeof body.key_features === "string" ? body.key_features : null,
+    data_inputs: typeof body.data_inputs === "string" ? body.data_inputs : null,
+    status_label: typeof body.status_label === "string" ? body.status_label : null,
+  };
 }
 
 /**
@@ -116,7 +127,81 @@ export async function POST(req: Request) {
     requested_by: user.id,
   });
 
+  // Richer profile fields — best-effort (no-op if apps_profile.sql isn't applied).
+  await supabase.from("apps").update(profilePatch(body)).eq("id", app.id);
+
   return NextResponse.json({ id: app.id, status: app.status });
+}
+
+/**
+ * PUT /api/apps  Body: { id, name?, url?, description?, category?, product_owner?,
+ *   primary_users?, key_features?, data_inputs?, status_label? }
+ * Updates an app's profile (additive metadata). Does NOT change governance status
+ * or launchability. Permission: member of the app's company AND (admin/builder OR
+ * the product owner) — same as delete. Writes use the service role after the
+ * check, so a non-builder product owner can still edit their app.
+ */
+export async function PUT(req: Request) {
+  const user = await getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const id = typeof body.id === "string" ? body.id : "";
+  if (!id) return NextResponse.json({ error: "App id is required" }, { status: 400 });
+
+  const supabase = createClient();
+  // RLS read confirms the caller is a member of the app's company.
+  const { data: app } = await supabase
+    .from("apps")
+    .select("id, product_owner, organization_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!app) return NextResponse.json({ error: "App not found in your company." }, { status: 404 });
+
+  const profile = await ensureProfile(user);
+  const allowed =
+    profile.app_role === "admin" || profile.app_role === "builder" || app.product_owner === user.id;
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Only an admin/builder of this company or the product owner can edit this app." },
+      { status: 403 }
+    );
+  }
+
+  const core: Record<string, unknown> = {};
+  if (typeof body.name === "string" && body.name.trim()) core.name = body.name.trim();
+  if (typeof body.url === "string") {
+    const u = body.url.trim();
+    if (u && !isHttpUrl(u)) return NextResponse.json({ error: "URL must start with http:// or https://" }, { status: 400 });
+    core.url = u;
+  }
+  if ("description" in body) core.description = typeof body.description === "string" ? body.description : null;
+  if ("category" in body) core.category = typeof body.category === "string" && body.category.trim() ? body.category.trim() : null;
+  // product_owner change — validate membership of the app's company.
+  if (typeof body.product_owner === "string" && body.product_owner && body.product_owner !== app.product_owner) {
+    const { data: pm } = await supabase
+      .from("org_members")
+      .select("user_id")
+      .eq("organization_id", app.organization_id)
+      .eq("user_id", body.product_owner)
+      .maybeSingle();
+    if (pm) core.product_owner = body.product_owner;
+  }
+
+  const db = createAdminClient();
+  if (Object.keys(core).length > 0) {
+    const { error } = await db.from("apps").update(core).eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  // Richer profile fields — best-effort (no-op if apps_profile.sql isn't applied).
+  await db.from("apps").update(profilePatch(body)).eq("id", id);
+
+  return NextResponse.json({ ok: true });
 }
 
 /**

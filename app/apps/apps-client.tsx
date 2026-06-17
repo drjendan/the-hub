@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/ui";
 import type { AgentStatus } from "@/lib/supabase/types";
@@ -10,14 +10,20 @@ export interface AppRow {
   id: string;
   name: string;
   url: string;
-  description: string | null;
+  description: string | null; // "what it does"
   category: string | null;
-  status: AgentStatus;
+  status: AgentStatus; // governance status
   created_at: string;
+  primary_users: string | null;
+  key_features: string | null;
+  data_inputs: string | null;
+  status_label: string | null; // operational/maturity, descriptive only
+  product_owner: string | null;
+  organization_id: string;
   owner_name: string;
   org_name: string;
   org_logo_url: string | null;
-  can_delete: boolean;
+  can_manage: boolean;
 }
 
 export interface Member {
@@ -32,6 +38,7 @@ export interface Org {
 }
 
 const STATUSES: ("All" | AgentStatus)[] = ["All", "published", "in_review", "blocked"];
+const STATUS_LABEL_SUGGESTIONS = ["Live", "Demo", "Live demo", "Live demo (Vercel)", "Live (production)", "Beta", "Planned", "Internal"];
 
 function fmtDate(iso: string): string {
   try {
@@ -62,12 +69,7 @@ export function AppsClient({
   const [status, setStatus] = useState<"All" | AgentStatus>("All");
   const [showForm, setShowForm] = useState(false);
 
-  const owners = useMemo(
-    () => ["All", ...Array.from(new Set(apps.map((a) => a.owner_name))).sort()],
-    [apps]
-  );
-  // Company filter is built from the user's companies, so it's available even
-  // before any apps exist in a given company.
+  const owners = useMemo(() => ["All", ...Array.from(new Set(apps.map((a) => a.owner_name))).sort()], [apps]);
   const companies = useMemo(() => ["All", ...orgs.map((o) => o.name)], [orgs]);
   const multiCompany = orgs.length > 1;
 
@@ -78,7 +80,8 @@ export function AppsClient({
       if (company !== "All" && a.org_name !== company) return false;
       if (status !== "All" && a.status !== status) return false;
       if (!needle) return true;
-      const hay = [a.name, a.description, a.category, a.owner_name].filter(Boolean).join(" ").toLowerCase();
+      const hay = [a.name, a.description, a.category, a.primary_users, a.key_features, a.data_inputs, a.status_label, a.owner_name]
+        .filter(Boolean).join(" ").toLowerCase();
       return hay.includes(needle);
     });
   }, [apps, q, owner, company, status]);
@@ -90,39 +93,30 @@ export function AppsClient({
           <div className="mb-1.5 text-[11px] uppercase tracking-[0.16em] text-accent font-semibold">Catalog</div>
           <h1 className="display text-[30px] font-semibold leading-none">Apps</h1>
           <p className="mt-2 text-[14px] text-ink-soft">
-            {results.length} of {apps.length} apps · launchable links to existing tools, governed like agents.
+            {results.length} of {apps.length} apps · compare what each does, who it serves, features, data, and status.
           </p>
         </div>
         {canCreate && (
-          <button
-            onClick={() => setShowForm((s) => !s)}
-            className="rounded-lg bg-ink px-4 py-2.5 text-[13px] font-medium text-paper hover:bg-ink-soft transition-colors"
-          >
+          <button onClick={() => setShowForm((s) => !s)}
+            className="rounded-lg bg-ink px-4 py-2.5 text-[13px] font-medium text-paper hover:bg-ink-soft transition-colors">
             {showForm ? "Close" : "+ Register app"}
           </button>
         )}
       </div>
 
       {showForm && canCreate && (
-        <RegisterForm
-          orgs={orgs}
-          membersByOrg={membersByOrg}
-          currentUserId={currentUserId}
-          currentOrgId={currentOrgId}
-          onDone={() => setShowForm(false)}
-        />
+        <div className="mt-6">
+          <AppForm orgs={orgs} membersByOrg={membersByOrg} currentUserId={currentUserId} currentOrgId={currentOrgId}
+            onDone={() => setShowForm(false)} onCancel={() => setShowForm(false)} />
+        </div>
       )}
 
       {/* Controls */}
       <div className="mt-6 flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[220px]">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft">⌕</span>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search apps…"
-            className="w-full rounded-lg border hairline bg-white pl-9 pr-3 py-2.5 outline-none focus:border-accent"
-          />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search apps…"
+            className="w-full rounded-lg border hairline bg-white pl-9 pr-3 py-2.5 outline-none focus:border-accent" />
         </div>
         <select value={owner} onChange={(e) => setOwner(e.target.value)}
           className="rounded-lg border hairline bg-white px-3 py-2.5 outline-none focus:border-accent">
@@ -146,10 +140,11 @@ export function AppsClient({
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Comparison grid — 2-up so profiles sit side by side */}
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
         {results.map((a) => (
-          <AppCard key={a.id} app={a} multiCompany={multiCompany} />
+          <AppCard key={a.id} app={a} orgs={orgs} membersByOrg={membersByOrg}
+            currentUserId={currentUserId} multiCompany={multiCompany} />
         ))}
       </div>
 
@@ -165,8 +160,27 @@ export function AppsClient({
   );
 }
 
-function AppCard({ app: a, multiCompany }: { app: AppRow; multiCompany: boolean }) {
+function ProfileField({ label, value }: { label: string; value: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="mt-2.5">
+      <div className="text-[10px] uppercase tracking-[0.1em] text-ink-soft/70">{label}</div>
+      <div className="mt-0.5 text-[13px] text-ink-soft leading-snug whitespace-pre-wrap">{value}</div>
+    </div>
+  );
+}
+
+function AppCard({
+  app: a, orgs, membersByOrg, currentUserId, multiCompany,
+}: {
+  app: AppRow;
+  orgs: Org[];
+  membersByOrg: Record<string, Member[]>;
+  currentUserId: string;
+  multiCompany: boolean;
+}) {
   const router = useRouter();
+  const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -193,6 +207,13 @@ function AppCard({ app: a, multiCompany }: { app: AppRow; multiCompany: boolean 
     }
   }
 
+  if (editing) {
+    return (
+      <AppForm app={a} orgs={orgs} membersByOrg={membersByOrg} currentUserId={currentUserId} currentOrgId={a.organization_id}
+        onDone={() => { setEditing(false); router.refresh(); }} onCancel={() => setEditing(false)} />
+    );
+  }
+
   return (
     <div className="card p-5 flex flex-col">
       <div className="flex items-start justify-between gap-2">
@@ -206,13 +227,22 @@ function AppCard({ app: a, multiCompany }: { app: AppRow; multiCompany: boolean 
         )}
         <StatusBadge status={a.status} />
       </div>
-      <h3 className="mt-3 display text-[17px] font-semibold leading-tight">{a.name}</h3>
-      <p className="mt-1.5 text-[13px] text-ink-soft leading-snug line-clamp-2">{a.description || "—"}</p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <h3 className="display text-[17px] font-semibold leading-tight">{a.name}</h3>
+        {a.status_label && (
+          <span className="rounded-full border hairline bg-black/[0.02] px-2 py-0.5 text-[11px] font-medium text-ink-soft">{a.status_label}</span>
+        )}
+      </div>
+
+      <ProfileField label="What it does" value={a.description} />
+      <ProfileField label="Primary users" value={a.primary_users} />
+      <ProfileField label="Key features" value={a.key_features} />
+      <ProfileField label="Data inputs" value={a.data_inputs} />
+
       <div className="mt-4 border-t hairline pt-3 text-[12px] text-ink-soft">
         <div className="flex items-center justify-between">
-          <span className="truncate">
-            Owner <span className="text-ink font-medium">{a.owner_name}</span>
-          </span>
+          <span className="truncate">Owner <span className="text-ink font-medium">{a.owner_name}</span></span>
           <span className="shrink-0">{a.category || "—"}</span>
         </div>
         <div className="mt-1 flex items-center justify-between">
@@ -220,14 +250,11 @@ function AppCard({ app: a, multiCompany }: { app: AppRow; multiCompany: boolean 
           <span className="shrink-0">{fmtDate(a.created_at)}</span>
         </div>
       </div>
+
       <div className="mt-4">
         {a.status === "published" ? (
-          <a
-            href={a.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block w-full rounded-lg bg-accent px-4 py-2 text-center text-[13px] font-medium text-white hover:bg-accent-deep transition-colors"
-          >
+          <a href={a.url} target="_blank" rel="noopener noreferrer"
+            className="block w-full rounded-lg bg-accent px-4 py-2 text-center text-[13px] font-medium text-white hover:bg-accent-deep transition-colors">
             Launch ↗
           </a>
         ) : (
@@ -236,25 +263,19 @@ function AppCard({ app: a, multiCompany }: { app: AppRow; multiCompany: boolean 
           </div>
         )}
       </div>
-      {a.can_delete && (
-        <div className="mt-3 border-t hairline pt-3">
-          {err && <p className="mb-2 text-[12px] text-rust">{err}</p>}
+
+      {a.can_manage && (
+        <div className="mt-3 border-t hairline pt-3 flex flex-wrap items-center gap-3 text-[12px]">
+          {err && <p className="text-rust">{err}</p>}
+          <button onClick={() => setEditing(true)} className="text-accent hover:underline">Edit</button>
           {!confirming ? (
-            <button onClick={() => setConfirming(true)} className="text-[12px] text-rust hover:underline">
-              Delete app
-            </button>
+            <button onClick={() => setConfirming(true)} className="text-rust hover:underline">Delete</button>
           ) : (
-            <div className="flex items-center gap-3">
-              <span className="text-[12px] text-ink-soft">Delete permanently?</span>
-              <button onClick={del} disabled={busy}
-                className="text-[12px] font-medium text-rust hover:underline disabled:opacity-40">
-                {busy ? "Deleting…" : "Yes, delete"}
-              </button>
-              <button onClick={() => setConfirming(false)} disabled={busy}
-                className="text-[12px] text-ink-soft hover:text-ink disabled:opacity-40">
-                Cancel
-              </button>
-            </div>
+            <span className="flex items-center gap-2">
+              <span className="text-ink-soft">Delete?</span>
+              <button onClick={del} disabled={busy} className="font-medium text-rust hover:underline disabled:opacity-40">{busy ? "…" : "Yes"}</button>
+              <button onClick={() => setConfirming(false)} disabled={busy} className="text-ink-soft hover:text-ink">No</button>
+            </span>
           )}
         </div>
       )}
@@ -262,39 +283,42 @@ function AppCard({ app: a, multiCompany }: { app: AppRow; multiCompany: boolean 
   );
 }
 
-function RegisterForm({
-  orgs,
-  membersByOrg,
-  currentUserId,
-  currentOrgId,
-  onDone,
+function AppForm({
+  orgs, membersByOrg, currentUserId, currentOrgId, app, onDone, onCancel,
 }: {
   orgs: Org[];
   membersByOrg: Record<string, Member[]>;
   currentUserId: string;
   currentOrgId: string;
+  app?: AppRow;
   onDone: () => void;
+  onCancel: () => void;
 }) {
   const router = useRouter();
-
-  const defaultOrg = orgs.some((o) => o.id === currentOrgId) ? currentOrgId : orgs[0]?.id || "";
-  const ownerFor = (orgId: string) => {
-    const members = membersByOrg[orgId] || [];
-    if (members.some((m) => m.id === currentUserId)) return currentUserId;
-    return members[0]?.id || currentUserId;
+  const dlId = useId();
+  const isEdit = !!app;
+  const defaultOrg = isEdit ? app!.organization_id : orgs.some((o) => o.id === currentOrgId) ? currentOrgId : orgs[0]?.id || "";
+  const ownerFor = (oid: string) => {
+    const m = membersByOrg[oid] || [];
+    if (m.some((x) => x.id === currentUserId)) return currentUserId;
+    return m[0]?.id || currentUserId;
   };
 
   const [orgIdSel, setOrgIdSel] = useState(defaultOrg);
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [category, setCategory] = useState("");
-  const [description, setDescription] = useState("");
-  const [productOwner, setProductOwner] = useState(ownerFor(defaultOrg));
+  const effectiveOrg = isEdit ? app!.organization_id : orgIdSel;
+  const [name, setName] = useState(app?.name ?? "");
+  const [url, setUrl] = useState(app?.url ?? "");
+  const [description, setDescription] = useState(app?.description ?? "");
+  const [primaryUsers, setPrimaryUsers] = useState(app?.primary_users ?? "");
+  const [keyFeatures, setKeyFeatures] = useState(app?.key_features ?? "");
+  const [dataInputs, setDataInputs] = useState(app?.data_inputs ?? "");
+  const [statusLabel, setStatusLabel] = useState(app?.status_label ?? "");
+  const [category, setCategory] = useState(app?.category ?? "");
+  const [productOwner, setProductOwner] = useState(app?.product_owner ?? ownerFor(effectiveOrg));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const members = membersByOrg[orgIdSel] || [];
-
+  const members = membersByOrg[effectiveOrg] || [];
   function changeOrg(next: string) {
     setOrgIdSel(next);
     setProductOwner(ownerFor(next));
@@ -305,24 +329,26 @@ function RegisterForm({
     setErr(null);
     setBusy(true);
     try {
+      const payload = {
+        name, url,
+        description: description || undefined,
+        category: category || undefined,
+        product_owner: productOwner,
+        primary_users: primaryUsers || undefined,
+        key_features: keyFeatures || undefined,
+        data_inputs: dataInputs || undefined,
+        status_label: statusLabel || undefined,
+      };
       const res = await fetch("/api/apps", {
-        method: "POST",
+        method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          organization_id: orgIdSel,
-          name,
-          url,
-          category: category || undefined,
-          description: description || undefined,
-          product_owner: productOwner,
-        }),
+        body: JSON.stringify(isEdit ? { id: app!.id, ...payload } : { organization_id: orgIdSel, ...payload }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setErr(data.error || "Could not register the app.");
+        setErr(data.error || "Could not save the app.");
         return;
       }
-      setName(""); setUrl(""); setCategory(""); setDescription("");
       router.refresh();
       onDone();
     } finally {
@@ -330,52 +356,85 @@ function RegisterForm({
     }
   }
 
+  const lbl = "mb-1.5 block text-[12px] font-medium text-ink-soft";
+  const inp = "w-full rounded-lg border hairline bg-white px-3 py-2.5 outline-none focus:border-accent";
+
   return (
-    <div className="mt-6 card p-5">
-      <h2 className="display text-[18px] font-semibold mb-1">Register an app</h2>
-      <p className="text-[12px] text-ink-soft mb-4">Submitted for governance review before it can launch.</p>
+    <div className="card p-5">
+      <h2 className="display text-[18px] font-semibold mb-1">{isEdit ? "Edit app" : "Register an app"}</h2>
+      <p className="text-[12px] text-ink-soft mb-4">
+        {isEdit
+          ? "Update this app's profile. Governance status and launchability are unchanged."
+          : "Submitted for governance review before it can launch."}
+      </p>
       <form onSubmit={submit} className="grid sm:grid-cols-2 gap-3">
         <label className="block">
-          <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Company</span>
-          <select value={orgIdSel} onChange={(e) => changeOrg(e.target.value)}
-            className="w-full rounded-lg border hairline bg-white px-3 py-2.5 outline-none focus:border-accent">
-            {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
+          <span className={lbl}>Company</span>
+          {isEdit ? (
+            <div className="w-full rounded-lg border hairline bg-black/[0.03] px-3 py-2.5 text-[14px] text-ink-soft">
+              {orgs.find((o) => o.id === effectiveOrg)?.name || "—"}
+            </div>
+          ) : (
+            <select value={orgIdSel} onChange={(e) => changeOrg(e.target.value)} className={inp}>
+              {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          )}
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Product owner</span>
-          <select value={productOwner} onChange={(e) => setProductOwner(e.target.value)}
-            className="w-full rounded-lg border hairline bg-white px-3 py-2.5 outline-none focus:border-accent">
+          <span className={lbl}>Product owner</span>
+          <select value={productOwner} onChange={(e) => setProductOwner(e.target.value)} className={inp}>
             {members.length === 0 && <option value={currentUserId}>You</option>}
             {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">App name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="LV Lead Financials"
-            className="w-full rounded-lg border hairline bg-white px-3 py-2.5 outline-none focus:border-accent" />
+          <span className={lbl}>App name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="LV Lead Financials" className={inp} />
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Launch URL</span>
-          <input value={url} onChange={(e) => setUrl(e.target.value)} required type="url" placeholder="https://…"
-            className="w-full rounded-lg border hairline bg-white px-3 py-2.5 outline-none focus:border-accent" />
+          <span className={lbl}>Launch URL</span>
+          <input value={url} onChange={(e) => setUrl(e.target.value)} required type="url" placeholder="https://…" className={inp} />
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Category (optional)</span>
-          <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Finance, Intelligence…"
-            className="w-full rounded-lg border hairline bg-white px-3 py-2.5 outline-none focus:border-accent" />
+          <span className={lbl}>Status label</span>
+          <input value={statusLabel} onChange={(e) => setStatusLabel(e.target.value)} list={dlId}
+            placeholder="Live demo (Vercel)" className={inp} />
+          <datalist id={dlId}>
+            {STATUS_LABEL_SUGGESTIONS.map((s) => <option key={s} value={s} />)}
+          </datalist>
+        </label>
+        <label className="block">
+          <span className={lbl}>Category (optional)</span>
+          <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Finance, Intelligence…" className={inp} />
         </label>
         <label className="block sm:col-span-2">
-          <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Description (optional)</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
-            placeholder="What this tool does and who uses it."
-            className="w-full rounded-lg border hairline bg-white px-3 py-2.5 outline-none focus:border-accent resize-none" />
+          <span className={lbl}>What it does</span>
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
+            placeholder="A full paragraph describing what this app does." className={`${inp} resize-y`} />
         </label>
-        <div className="sm:col-span-2">
-          {err && <p className="mb-2 text-[12px] text-rust">{err}</p>}
+        <label className="block sm:col-span-2">
+          <span className={lbl}>Primary users</span>
+          <input value={primaryUsers} onChange={(e) => setPrimaryUsers(e.target.value)}
+            placeholder="Who the app serves — e.g. finance team, portfolio CFOs." className={inp} />
+        </label>
+        <label className="block sm:col-span-2">
+          <span className={lbl}>Key features</span>
+          <textarea value={keyFeatures} onChange={(e) => setKeyFeatures(e.target.value)} rows={2}
+            placeholder="Main features — a few sentences or a simple list." className={`${inp} resize-y`} />
+        </label>
+        <label className="block sm:col-span-2">
+          <span className={lbl}>Data inputs</span>
+          <input value={dataInputs} onChange={(e) => setDataInputs(e.target.value)}
+            placeholder="What data/inputs it uses — e.g. QuickBooks exports, LeadHoop CSVs." className={inp} />
+        </label>
+        <div className="sm:col-span-2 flex items-center gap-3">
+          {err && <p className="text-[12px] text-rust">{err}</p>}
           <button type="submit" disabled={busy || !name.trim() || !url.trim()}
             className="rounded-lg bg-ink px-4 py-2.5 text-[14px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
-            {busy ? "Submitting…" : "Submit for approval"}
+            {busy ? "Saving…" : isEdit ? "Save changes" : "Submit for approval"}
+          </button>
+          <button type="button" onClick={onCancel} disabled={busy} className="text-[13px] text-ink-soft hover:text-ink disabled:opacity-40">
+            Cancel
           </button>
         </div>
       </form>

@@ -28,12 +28,11 @@ export default async function AppsPage() {
   // already-resilient org list (so this query has no logo_url dependency).
   const [{ data: appData }, { data: memberData }] = await Promise.all([
     supabase
+      // select * so new profile columns don't break the catalog before
+      // apps_profile.sql is run. apps has two FKs to profiles (product_owner +
+      // created_by) — disambiguate the embed to product_owner.
       .from("apps")
-      .select(
-        // apps has two FKs to profiles (product_owner + created_by) — disambiguate
-        // the embed to product_owner, else PostgREST errors and the catalog is empty.
-        "id, name, url, description, category, status, created_at, product_owner, organization_id, owner:profiles!product_owner(full_name, email)"
-      )
+      .select("*, owner:profiles!product_owner(full_name, email)")
       .order("created_at", { ascending: false }),
     supabase
       .from("org_members")
@@ -55,10 +54,16 @@ export default async function AppsPage() {
       category: a.category,
       status: a.status,
       created_at: a.created_at,
+      primary_users: a.primary_users ?? null,
+      key_features: a.key_features ?? null,
+      data_inputs: a.data_inputs ?? null,
+      status_label: a.status_label ?? null,
+      product_owner: a.product_owner ?? null,
+      organization_id: a.organization_id,
       owner_name: owner?.full_name || owner?.email || "Unassigned",
       org_name: org?.name || "—",
       org_logo_url: org?.logo_url ?? null,
-      can_delete: canManage || a.product_owner === user.id,
+      can_manage: canManage || a.product_owner === user.id,
     };
   });
 
