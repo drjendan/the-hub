@@ -4,20 +4,24 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 /**
- * Per-company mission statement, shown at the top of the dashboard. Editable by
- * company admins/owners (canEdit). Hidden entirely for non-admins when unset.
+ * Per-company mission statement (a headline + body), shown at the top of the
+ * dashboard. Editable by company admins/owners (canEdit). Hidden entirely for
+ * non-admins when nothing is set.
  */
 export function MissionBanner({
   orgId,
   initialMission,
+  initialHeadline,
   canEdit,
 }: {
   orgId: string;
   initialMission: string | null;
+  initialHeadline: string | null;
   canEdit: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [headline, setHeadline] = useState(initialHeadline ?? "");
   const [value, setValue] = useState(initialMission ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -29,7 +33,7 @@ export function MissionBanner({
       const res = await fetch("/api/admin/mission", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ org_id: orgId, mission: value }),
+        body: JSON.stringify({ org_id: orgId, mission: value, headline }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -45,13 +49,20 @@ export function MissionBanner({
     }
   }
 
-  // Graceful fallback: nothing to show for non-admins when no mission is set.
-  if (!initialMission && !canEdit && !editing) return null;
+  // Graceful fallback: nothing to show for non-admins when nothing is set.
+  if (!initialMission && !initialHeadline && !canEdit && !editing) return null;
 
   if (editing) {
     return (
       <div className="mt-6 card p-5">
         <div className="mb-2 text-[11px] uppercase tracking-[0.12em] text-accent font-semibold">Mission</div>
+        <input
+          value={headline}
+          onChange={(e) => setHeadline(e.target.value)}
+          maxLength={160}
+          placeholder="Headline — e.g. Empowering learners everywhere"
+          className="mb-2 w-full rounded-lg border hairline bg-white px-3 py-2.5 text-[15px] font-semibold outline-none focus:border-accent"
+        />
         <textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -66,7 +77,9 @@ export function MissionBanner({
             className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
             {busy ? "Saving…" : "Save"}
           </button>
-          <button onClick={() => { setEditing(false); setValue(initialMission ?? ""); }} disabled={busy}
+          <button
+            onClick={() => { setEditing(false); setValue(initialMission ?? ""); setHeadline(initialHeadline ?? ""); }}
+            disabled={busy}
             className="text-[13px] text-ink-soft hover:text-ink disabled:opacity-40">
             Cancel
           </button>
@@ -80,15 +93,18 @@ export function MissionBanner({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-1 text-[11px] uppercase tracking-[0.12em] text-accent font-semibold">Mission</div>
-          {initialMission ? (
-            <p className="text-[15px] leading-relaxed text-ink">{initialMission}</p>
-          ) : (
-            <p className="text-[14px] italic text-ink-soft">No mission statement yet.</p>
+          {initialHeadline && (
+            <h2 className="display text-[18px] font-semibold leading-tight text-ink">{initialHeadline}</h2>
           )}
+          {initialMission ? (
+            <p className={`text-[15px] leading-relaxed text-ink ${initialHeadline ? "mt-1" : ""}`}>{initialMission}</p>
+          ) : !initialHeadline ? (
+            <p className="text-[14px] italic text-ink-soft">No mission statement yet.</p>
+          ) : null}
         </div>
         {canEdit && (
           <button onClick={() => setEditing(true)} className="shrink-0 text-[12px] text-accent hover:underline">
-            {initialMission ? "Edit" : "Add"}
+            {initialMission || initialHeadline ? "Edit" : "Add"}
           </button>
         )}
       </div>

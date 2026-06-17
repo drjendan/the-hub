@@ -24,7 +24,7 @@ async function authorize(orgId: string): Promise<{ ok: true } | { error: NextRes
 
 /** PUT  Body: { org_id, mission } — set (or clear, with empty) the mission statement. */
 export async function PUT(req: Request) {
-  let body: { org_id?: unknown; mission?: unknown };
+  let body: { org_id?: unknown; mission?: unknown; headline?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -38,11 +38,13 @@ export async function PUT(req: Request) {
 
   let mission = typeof body.mission === "string" ? body.mission.trim() : "";
   if (mission.length > MAX) mission = mission.slice(0, MAX);
+  let headline = typeof body.headline === "string" ? body.headline.trim() : "";
+  if (headline.length > 160) headline = headline.slice(0, 160);
 
   const db = createAdminClient();
   const { error } = await db
     .from("organizations")
-    .update({ mission_statement: mission || null })
+    .update({ mission_statement: mission || null, mission_headline: headline || null })
     .eq("id", orgId);
   if (error) {
     return NextResponse.json(
@@ -50,5 +52,5 @@ export async function PUT(req: Request) {
       { status: 500 }
     );
   }
-  return NextResponse.json({ mission_statement: mission || null });
+  return NextResponse.json({ mission_statement: mission || null, mission_headline: headline || null });
 }

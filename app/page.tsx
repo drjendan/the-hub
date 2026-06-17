@@ -74,16 +74,24 @@ export default async function DashboardPage() {
   const currentOrg = orgs.find((o) => o.id === orgId);
   const canEditMission = profile.app_role === "admin" || currentOrg?.org_role === "owner";
 
-  // Mission statement — resilient: stays null if mission.sql hasn't been run yet.
+  // Mission statement — resilient: falls back if the headline column or the whole
+  // mission.sql migration hasn't been run yet.
   let mission: string | null = null;
+  let missionHeadline: string | null = null;
   {
-    const { data: orgRow, error: missionErr } = await supabase
+    const withHeadline = await supabase
       .from("organizations")
-      .select("mission_statement")
+      .select("mission_statement, mission_headline")
       .eq("id", orgId)
       .maybeSingle();
-    if (!missionErr && orgRow) {
-      mission = (orgRow as { mission_statement: string | null }).mission_statement ?? null;
+    let row = withHeadline.data as Record<string, unknown> | null;
+    if (withHeadline.error) {
+      const base = await supabase.from("organizations").select("mission_statement").eq("id", orgId).maybeSingle();
+      row = base.error ? null : (base.data as Record<string, unknown> | null);
+    }
+    if (row) {
+      mission = (row.mission_statement as string | null) ?? null;
+      missionHeadline = (row.mission_headline as string | null) ?? null;
     }
   }
 
@@ -100,7 +108,7 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      <MissionBanner orgId={orgId} initialMission={mission} canEdit={!!canEditMission} />
+      <MissionBanner orgId={orgId} initialMission={mission} initialHeadline={missionHeadline} canEdit={!!canEditMission} />
 
       <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile label="Total agents" value={String(agents.length)} hint="in this company" delay="rise-1" />

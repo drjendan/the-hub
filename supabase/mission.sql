@@ -4,5 +4,6 @@
 -- =====================================================================
 
 alter table public.organizations add column if not exists mission_statement text;
+alter table public.organizations add column if not exists mission_headline text;
 
 -- End of mission.sql

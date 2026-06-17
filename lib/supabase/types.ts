@@ -49,6 +49,7 @@ export interface Organization {
   size_band: string | null;
   governance_mode: string | null;
   logo_url: string | null;
+  mission_headline: string | null;
   mission_statement: string | null;
   created_at: string;
 }
