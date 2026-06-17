@@ -30,7 +30,9 @@ export default async function AppsPage() {
     supabase
       .from("apps")
       .select(
-        "id, name, url, description, category, status, created_at, product_owner, organization_id, owner:profiles(full_name, email)"
+        // apps has two FKs to profiles (product_owner + created_by) — disambiguate
+        // the embed to product_owner, else PostgREST errors and the catalog is empty.
+        "id, name, url, description, category, status, created_at, product_owner, organization_id, owner:profiles!product_owner(full_name, email)"
       )
       .order("created_at", { ascending: false }),
     supabase
