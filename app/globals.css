@@ -3,14 +3,14 @@
 @tailwind utilities;
 
 :root {
-  /* Theme matched to PrimeTDAP: cool near-white, navy ink, royal-blue accent. */
-  --bg: #f8fafc;
-  --bg-2: #eef2f7;
-  --ink: #141a27;
-  --ink-soft: #5b6573;
-  --line: #e5e9f0;
-  --accent: #2b53d1;
-  --accent-deep: #1e3fa8;
+  /* Warm terracotta theme: warm ivory, warm charcoal ink, muted terracotta accent. */
+  --bg: #faf7f2;
+  --bg-2: #f1ece3;
+  --ink: #211c18;
+  --ink-soft: #6b5f55;
+  --line: #e8e1d6;
+  --accent: #b25a3f;
+  --accent-deep: #8f4530;
 }
 
 * { box-sizing: border-box; }
@@ -34,8 +34,8 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(1200px 600px at 85% -10%, rgba(43,83,209,0.08), transparent 60%),
-    radial-gradient(900px 500px at -5% 110%, rgba(91,101,115,0.06), transparent 55%);
+    radial-gradient(1200px 600px at 85% -10%, rgba(178,90,63,0.09), transparent 60%),
+    radial-gradient(900px 500px at -5% 110%, rgba(143,69,48,0.06), transparent 55%);
 }
 
 h1, h2, h3, .display {
@@ -77,8 +77,8 @@ input, select, textarea {
   font-size: 0.92rem;
 }
 
-::selection { background: rgba(43,83,209,0.16); }
+::selection { background: rgba(178,90,63,0.18); }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #ccd4e1; border-radius: 8px; border: 3px solid var(--bg); }
+::-webkit-scrollbar-thumb { background: #ddd3c5; border-radius: 8px; border: 3px solid var(--bg); }

@@ -9,18 +9,18 @@ const config: Config = {
     extend: {
       colors: {
         ink: {
-          DEFAULT: "#141a27",   // cool navy (headings, dark surfaces)
-          soft: "#1e2638",
-          line: "#2b3446",
+          DEFAULT: "#211c18",   // warm charcoal (headings, dark surfaces)
+          soft: "#322a23",
+          line: "#3e352d",
         },
-        paper: "#f8fafc",       // cool near-white
+        paper: "#faf7f2",       // warm ivory
         accent: {
-          DEFAULT: "#2b53d1",   // royal blue — matches the PrimeTDAP brand
-          soft: "#7591e6",
-          deep: "#1e3fa8",
+          DEFAULT: "#b25a3f",   // muted terracotta — warm but professional
+          soft: "#d39a85",
+          deep: "#8f4530",
         },
-        moss: "#1d7d5f",        // approved / healthy (cool emerald)
-        rust: "#c43d3d",        // blocked / risk (clean red)
+        moss: "#3f7d5e",        // approved / healthy (warm-leaning green)
+        rust: "#bb4533",        // blocked / risk (warm red)
         gold: "#b8801c",        // pending / review (amber)
       },
       fontFamily: {
