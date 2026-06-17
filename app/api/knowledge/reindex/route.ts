@@ -2,38 +2,17 @@ import { NextResponse } from "next/server";
 import { currentOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { embedTexts } from "@/lib/embeddings";
+import { chunkText } from "@/lib/knowledge-index";
 
 export const runtime = "nodejs";
 
-type Chunk = { source_type: string; source_title: string; content: string };
-
-/** Split long document text into ~1200-char chunks on paragraph boundaries. */
-function chunkText(text: string, maxLen = 1200): string[] {
-  const clean = text.replace(/\r/g, "").trim();
-  if (!clean) return [];
-  if (clean.length <= maxLen) return [clean];
-  const chunks: string[] = [];
-  let cur = "";
-  for (const para of clean.split(/\n{2,}/)) {
-    let p = para;
-    while (p.length > maxLen) {
-      // hard-split a single oversized paragraph
-      if (cur) { chunks.push(cur.trim()); cur = ""; }
-      chunks.push(p.slice(0, maxLen));
-      p = p.slice(maxLen);
-    }
-    if ((cur + "\n\n" + p).length > maxLen && cur) { chunks.push(cur.trim()); cur = p; }
-    else cur = cur ? cur + "\n\n" + p : p;
-  }
-  if (cur.trim()) chunks.push(cur.trim());
-  return chunks;
-}
+type Chunk = { source_type: string; source_id: string | null; source_title: string; content: string };
 
 /**
  * POST /api/knowledge/reindex
- * (Re)builds the org's RAG corpus from its governance knowledge — active
- * policies, best-practice docs, and enabled compliance-pack requirements —
- * embeds each, and replaces the org's knowledge_chunks. Admin/owner only.
+ * Full rebuild of the org's RAG corpus from active policies, best practices,
+ * enabled compliance-pack requirements, and uploaded documents. (Knowledge edits
+ * auto-reindex per-item; this is the "rebuild everything" fallback.) Admin/owner.
  */
 export async function POST() {
   const admin = await currentOrgAdmin();
@@ -42,32 +21,31 @@ export async function POST() {
   const supabase = createClient();
 
   const [{ data: pol }, { data: bp }, { data: packs }, { data: docs }] = await Promise.all([
-    supabase.from("policies").select("title, body").eq("organization_id", orgId).eq("active", true),
-    supabase.from("best_practices").select("title, body").eq("organization_id", orgId),
-    supabase.from("org_compliance_packs").select("pack:compliance_packs(name, requirements)").eq("organization_id", orgId),
-    supabase.from("knowledge_documents").select("title, content").eq("organization_id", orgId),
+    supabase.from("policies").select("id, title, body").eq("organization_id", orgId).eq("active", true),
+    supabase.from("best_practices").select("id, title, body").eq("organization_id", orgId),
+    supabase.from("org_compliance_packs").select("pack:compliance_packs(id, name, requirements)").eq("organization_id", orgId),
+    supabase.from("knowledge_documents").select("id, title, content").eq("organization_id", orgId),
   ]);
 
   const chunks: Chunk[] = [];
   for (const p of pol || []) {
-    chunks.push({ source_type: "policy", source_title: p.title, content: `Policy — ${p.title}\n${p.body || ""}`.trim() });
+    chunks.push({ source_type: "policy", source_id: p.id, source_title: p.title, content: `Policy — ${p.title}\n${p.body || ""}`.trim() });
   }
   for (const b of bp || []) {
-    chunks.push({ source_type: "best_practice", source_title: b.title, content: `Best practice — ${b.title}\n${b.body || ""}`.trim() });
+    chunks.push({ source_type: "best_practice", source_id: b.id, source_title: b.title, content: `Best practice — ${b.title}\n${b.body || ""}`.trim() });
   }
   for (const row of packs || []) {
-    const pack = row.pack as unknown as { name: string; requirements: string[] } | null;
+    const pack = row.pack as unknown as { id: string; name: string; requirements: string[] } | null;
     if (!pack) continue;
     const reqs = Array.isArray(pack.requirements) ? pack.requirements : [];
-    for (const r of reqs) chunks.push({ source_type: "compliance", source_title: pack.name, content: `${pack.name} requirement: ${r}` });
+    for (const r of reqs) chunks.push({ source_type: "compliance", source_id: pack.id, source_title: pack.name, content: `${pack.name} requirement: ${r}` });
   }
   for (const d of docs || []) {
     for (const piece of chunkText((d.content as string) || "")) {
-      chunks.push({ source_type: "document", source_title: d.title, content: piece });
+      chunks.push({ source_type: "document", source_id: d.id, source_title: d.title, content: piece });
     }
   }
 
-  // Clear-and-replace. If there's nothing to index, just clear.
   const clear = await supabase.from("knowledge_chunks").delete().eq("organization_id", orgId);
   if (clear.error) {
     return NextResponse.json(
@@ -76,7 +54,7 @@ export async function POST() {
     );
   }
   if (chunks.length === 0) {
-    return NextResponse.json({ ok: true, count: 0, message: "Nothing to index — add active policies/best practices or enable a compliance pack first." });
+    return NextResponse.json({ ok: true, count: 0, message: "Nothing to index — add active policies/best practices, enable a pack, or upload a document first." });
   }
 
   let embeddings: number[][] | null;
@@ -96,6 +74,7 @@ export async function POST() {
   const rows = chunks.map((c, i) => ({
     organization_id: orgId,
     source_type: c.source_type,
+    source_id: c.source_id,
     source_title: c.source_title,
     content: c.content,
     embedding: JSON.stringify(embeddings![i]),

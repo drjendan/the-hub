@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { reembedSource, removeSource, entryContent } from "@/lib/knowledge-index";
 
 export const runtime = "nodejs";
 
@@ -44,6 +45,9 @@ export async function POST(req: Request) {
     .select("id")
     .single();
   if (error) return fail(error);
+  await reembedSource(admin.orgId, "best_practice", data.id, title, [
+    entryContent("Best practice", title, typeof body.body === "string" ? body.body : null),
+  ]);
   return NextResponse.json({ id: data.id });
 }
 
@@ -68,8 +72,14 @@ export async function PUT(req: Request) {
   if (Object.keys(patch).length === 0) return NextResponse.json({ ok: true });
 
   const supabase = createClient();
-  const { error } = await supabase.from("best_practices").update(patch).eq("id", id);
+  const { data: updated, error } = await supabase
+    .from("best_practices")
+    .update(patch)
+    .eq("id", id)
+    .select("title, body")
+    .single();
   if (error) return fail(error);
+  await reembedSource(admin.orgId, "best_practice", id, updated.title, [entryContent("Best practice", updated.title, updated.body)]);
   return NextResponse.json({ ok: true });
 }
 
@@ -90,5 +100,6 @@ export async function DELETE(req: Request) {
   const supabase = createClient();
   const { error } = await supabase.from("best_practices").delete().eq("id", id);
   if (error) return fail(error);
+  await removeSource(admin.orgId, id);
   return NextResponse.json({ ok: true });
 }

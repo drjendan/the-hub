@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { reembedSource, removeSource, chunkText } from "@/lib/knowledge-index";
 
 export const runtime = "nodejs";
 
@@ -72,19 +73,25 @@ export async function POST(req: Request) {
   const title = titleField || file.name;
 
   const supabase = createClient();
-  const { error } = await supabase.from("knowledge_documents").insert({
-    organization_id: admin.orgId,
-    title,
-    filename: file.name,
-    content: text,
-    created_by: admin.user.id,
-  });
+  const { data: doc, error } = await supabase
+    .from("knowledge_documents")
+    .insert({
+      organization_id: admin.orgId,
+      title,
+      filename: file.name,
+      content: text,
+      created_by: admin.user.id,
+    })
+    .select("id")
+    .single();
   if (error) {
     return NextResponse.json(
       { error: error.code === "42P01" ? "Knowledge documents aren't enabled yet. Run supabase/knowledge_docs.sql." : error.message },
       { status: error.code === "42P01" ? 400 : 500 }
     );
   }
+  // Auto-embed the new document into the RAG corpus (best-effort).
+  await reembedSource(admin.orgId, "document", doc.id, title, chunkText(text));
   return NextResponse.json({ ok: true, title, chars: text.length });
 }
 
@@ -105,5 +112,6 @@ export async function DELETE(req: Request) {
   const supabase = createClient();
   const { error } = await supabase.from("knowledge_documents").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await removeSource(admin.orgId, id);
   return NextResponse.json({ ok: true });
 }

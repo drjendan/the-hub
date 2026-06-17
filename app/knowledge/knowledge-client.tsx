@@ -206,9 +206,9 @@ function SyncBar({ chunkCount }: { chunkCount: number }) {
       </span>
       <button onClick={sync} disabled={busy}
         className="rounded-lg bg-ink px-3 py-1.5 text-[12px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
-        {busy ? "Syncing…" : "Sync knowledge"}
+        {busy ? "Rebuilding…" : "Rebuild index"}
       </button>
-      <span className="text-[12px] text-ink-soft">Re-run after changing policies, best practices, or packs.</span>
+      <span className="text-[12px] text-ink-soft">Updates automatically when you edit knowledge. Use Rebuild to re-embed everything.</span>
       {msg && <span className={`text-[12px] ${msg.tone === "ok" ? "text-moss" : "text-rust"}`}>{msg.text}</span>}
     </div>
   );

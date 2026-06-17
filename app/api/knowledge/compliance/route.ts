@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { reembedSource, removeSource } from "@/lib/knowledge-index";
 
 export const runtime = "nodejs";
 
@@ -37,6 +38,12 @@ export async function POST(req: Request) {
     .insert({ organization_id: admin.orgId, pack_id: packId, enabled_by: admin.user.id });
   // 23505 = already enabled — treat as success (idempotent).
   if (error && error.code !== "23505") return fail(error);
+
+  const { data: pack } = await supabase.from("compliance_packs").select("name, requirements").eq("id", packId).maybeSingle();
+  if (pack) {
+    const reqs = Array.isArray(pack.requirements) ? (pack.requirements as string[]) : [];
+    await reembedSource(admin.orgId, "compliance", packId, pack.name, reqs.map((r) => `${pack.name} requirement: ${r}`));
+  }
   return NextResponse.json({ ok: true, enabled: true });
 }
 
@@ -61,5 +68,6 @@ export async function DELETE(req: Request) {
     .eq("organization_id", admin.orgId)
     .eq("pack_id", packId);
   if (error) return fail(error);
+  await removeSource(admin.orgId, packId);
   return NextResponse.json({ ok: true, enabled: false });
 }
