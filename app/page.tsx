@@ -33,7 +33,7 @@ export default async function DashboardPage() {
                 You don&apos;t have any companies yet. Create your first company (tenant), then
                 assign users and start building agents.
               </p>
-              <Link href="/admin" className="mt-5 inline-block rounded-lg bg-ink px-5 py-2.5 text-[13px] font-medium text-paper hover:bg-ink-soft transition-colors">
+              <Link href="/admin" className="mt-5 inline-block rounded-lg bg-ink px-5 py-2.5 text-[13px] font-medium text-paper hover:bg-ink-line transition-colors">
                 Create a company →
               </Link>
             </>
@@ -103,7 +103,7 @@ export default async function DashboardPage() {
           <h1 className="display text-[30px] font-semibold leading-none">{currentOrg?.name || "Dashboard"}</h1>
           <p className="mt-2 text-[14px] text-ink-soft">Your agent fleet at a glance.</p>
         </div>
-        <Link href="/builder" className="rounded-lg bg-ink px-4 py-2.5 text-[13px] font-medium text-paper hover:bg-ink-soft transition-colors">
+        <Link href="/builder" className="rounded-lg bg-ink px-4 py-2.5 text-[13px] font-medium text-paper hover:bg-ink-line transition-colors">
           + New agent
         </Link>
       </div>

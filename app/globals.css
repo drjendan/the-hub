@@ -3,14 +3,14 @@
 @tailwind utilities;
 
 :root {
-  /* Theme matched to PrimeTDAP: cool near-white, navy ink, royal-blue accent. */
-  --bg: #f8fafc;
-  --bg-2: #eef2f7;
-  --ink: #141a27;
-  --ink-soft: #5b6573;
-  --line: #e5e9f0;
-  --accent: #2b53d1;
-  --accent-deep: #1e3fa8;
+  /* Calm cool neutrals + logo cyan accent (terracotta is a sparing secondary). */
+  --bg: #edf0f1;
+  --bg-2: #e4e8e9;
+  --ink: #15232c;
+  --ink-soft: #5a6b73;
+  --line: #d7dde0;
+  --accent: #11b2ee;
+  --accent-deep: #0c90c4;
 }
 
 * { box-sizing: border-box; }
@@ -26,7 +26,7 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Subtle paper grain + warm vignette behind everything */
+/* Subtle cool vignette behind everything (logo cyan + neutral slate) */
 body::before {
   content: "";
   position: fixed;
@@ -34,8 +34,8 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(1200px 600px at 85% -10%, rgba(43,83,209,0.08), transparent 60%),
-    radial-gradient(900px 500px at -5% 110%, rgba(91,101,115,0.06), transparent 55%);
+    radial-gradient(1200px 600px at 85% -10%, rgba(17,178,238,0.07), transparent 60%),
+    radial-gradient(900px 500px at -5% 110%, rgba(90,107,115,0.05), transparent 55%);
 }
 
 h1, h2, h3, .display {
@@ -77,8 +77,8 @@ input, select, textarea {
   font-size: 0.92rem;
 }
 
-::selection { background: rgba(43,83,209,0.16); }
+::selection { background: rgba(17,178,238,0.18); }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #ccd4e1; border-radius: 8px; border: 3px solid var(--bg); }
+::-webkit-scrollbar-thumb { background: #c8d0d3; border-radius: 8px; border: 3px solid var(--bg); }

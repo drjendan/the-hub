@@ -58,7 +58,7 @@ export default function CorporateIntake() {
           <p className="mt-2 text-ink-soft text-[14px]">
             Profile saved for {name || "your company"}. Next, match a role to agents.
           </p>
-          <a href="/intake/role" className="mt-5 inline-block rounded-lg bg-ink px-5 py-2.5 text-[13px] font-medium text-paper hover:bg-ink-soft transition-colors">
+          <a href="/intake/role" className="mt-5 inline-block rounded-lg bg-ink px-5 py-2.5 text-[13px] font-medium text-paper hover:bg-ink-line transition-colors">
             Match a role →
           </a>
         </div>
@@ -132,7 +132,7 @@ export default function CorporateIntake() {
         {err && <p className="text-[12px] text-rust">{err}</p>}
 
         <button onClick={submit} disabled={saving || !name.trim()}
-          className="w-full rounded-lg bg-ink py-2.5 text-[14px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
+          className="w-full rounded-lg bg-ink py-2.5 text-[14px] font-medium text-paper hover:bg-ink-line disabled:opacity-40 transition-colors">
           {saving ? "Saving…" : "Save company profile"}
         </button>
       </div>

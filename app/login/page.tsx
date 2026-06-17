@@ -122,7 +122,7 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-ink py-2.5 text-[14px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors"
+              className="w-full rounded-lg bg-ink py-2.5 text-[14px] font-medium text-paper hover:bg-ink-line disabled:opacity-40 transition-colors"
             >
               {loading ? "Working…" : mode === "signin" ? "Sign in" : "Create account"}
             </button>

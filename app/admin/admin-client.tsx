@@ -99,7 +99,7 @@ export function AdminClient({ orgs }: { orgs: AdminOrg[] }) {
             <button
               type="submit"
               disabled={creating || !name.trim()}
-              className="rounded-lg bg-ink px-4 py-2.5 text-[14px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors"
+              className="rounded-lg bg-ink px-4 py-2.5 text-[14px] font-medium text-paper hover:bg-ink-line disabled:opacity-40 transition-colors"
             >
               {creating ? "Creating…" : "Create company"}
             </button>

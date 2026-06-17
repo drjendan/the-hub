@@ -98,7 +98,7 @@ export function AppsClient({
         </div>
         {canCreate && (
           <button onClick={() => setShowForm((s) => !s)}
-            className="rounded-lg bg-ink px-4 py-2.5 text-[13px] font-medium text-paper hover:bg-ink-soft transition-colors">
+            className="rounded-lg bg-ink px-4 py-2.5 text-[13px] font-medium text-paper hover:bg-ink-line transition-colors">
             {showForm ? "Close" : "+ Register app"}
           </button>
         )}
@@ -430,7 +430,7 @@ function AppForm({
         <div className="sm:col-span-2 flex items-center gap-3">
           {err && <p className="text-[12px] text-rust">{err}</p>}
           <button type="submit" disabled={busy || !name.trim() || !url.trim()}
-            className="rounded-lg bg-ink px-4 py-2.5 text-[14px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
+            className="rounded-lg bg-ink px-4 py-2.5 text-[14px] font-medium text-paper hover:bg-ink-line disabled:opacity-40 transition-colors">
             {busy ? "Saving…" : isEdit ? "Save changes" : "Submit for approval"}
           </button>
           <button type="button" onClick={onCancel} disabled={busy} className="text-[13px] text-ink-soft hover:text-ink disabled:opacity-40">

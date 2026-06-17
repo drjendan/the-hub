@@ -128,7 +128,7 @@ export function AccessManager({
           {err && <p className="mb-2 text-[12px] text-rust">{err}</p>}
           <div className="flex items-center gap-3">
             <button onClick={save} disabled={busy}
-              className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
+              className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-paper hover:bg-ink-line disabled:opacity-40 transition-colors">
               {busy ? "Saving…" : "Save"}
             </button>
             <button onClick={() => setEditing(false)} disabled={busy} className="text-[13px] text-ink-soft hover:text-ink disabled:opacity-40">

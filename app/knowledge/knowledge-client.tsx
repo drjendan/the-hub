@@ -143,7 +143,7 @@ function DocumentsSection({ documents, canManage }: { documents: Doc[]; canManag
     <div className="mt-6 space-y-3">
       {canManage && (
         <div className="card p-4">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-paper hover:bg-ink-soft transition-colors">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-paper hover:bg-ink-line transition-colors">
             {busy ? "Uploading…" : "Upload PDF or Word (.docx)"}
             <input type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               className="hidden" onChange={upload} disabled={busy} />
@@ -205,7 +205,7 @@ function SyncBar({ chunkCount }: { chunkCount: number }) {
         <span className="font-medium text-ink">AI grounding (RAG)</span> · {chunkCount} item{chunkCount === 1 ? "" : "s"} indexed
       </span>
       <button onClick={sync} disabled={busy}
-        className="rounded-lg bg-ink px-3 py-1.5 text-[12px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
+        className="rounded-lg bg-ink px-3 py-1.5 text-[12px] font-medium text-paper hover:bg-ink-line disabled:opacity-40 transition-colors">
         {busy ? "Rebuilding…" : "Rebuild index"}
       </button>
       <span className="text-[12px] text-ink-soft">Updates automatically when you edit knowledge. Use Rebuild to re-embed everything.</span>
@@ -234,7 +234,7 @@ function EntrySection({
           <EntryForm endpoint={endpoint} onDone={() => { setAdding(false); router.refresh(); }} onCancel={() => setAdding(false)} />
         ) : (
           <button onClick={() => setAdding(true)}
-            className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-paper hover:bg-ink-soft transition-colors">
+            className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-paper hover:bg-ink-line transition-colors">
             + Add {addLabel}
           </button>
         )
@@ -296,7 +296,7 @@ function EntryForm({
       {err && <p className="text-[12px] text-rust">{err}</p>}
       <div className="flex items-center gap-3">
         <button onClick={submit} disabled={busy || !title.trim()}
-          className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
+          className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-paper hover:bg-ink-line disabled:opacity-40 transition-colors">
           {busy ? "Saving…" : "Save"}
         </button>
         <button onClick={onCancel} disabled={busy} className="text-[13px] text-ink-soft hover:text-ink disabled:opacity-40">Cancel</button>

@@ -121,7 +121,7 @@ function ProviderCard({
         <button
           type="submit"
           disabled={busy || !apiKey.trim()}
-          className="rounded-lg bg-ink px-4 py-2.5 text-[14px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors whitespace-nowrap"
+          className="rounded-lg bg-ink px-4 py-2.5 text-[14px] font-medium text-paper hover:bg-ink-line disabled:opacity-40 transition-colors whitespace-nowrap"
         >
           {busy ? "Testing…" : "Test & save"}
         </button>

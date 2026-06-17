@@ -74,7 +74,7 @@ export function MissionBanner({
         {err && <p className="mt-2 text-[12px] text-rust">{err}</p>}
         <div className="mt-3 flex items-center gap-3">
           <button onClick={save} disabled={busy}
-            className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
+            className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-paper hover:bg-ink-line disabled:opacity-40 transition-colors">
             {busy ? "Saving…" : "Save"}
           </button>
           <button
@@ -89,10 +89,10 @@ export function MissionBanner({
   }
 
   return (
-    <div className="mt-6 rounded-xl border-l-2 border-accent bg-accent/[0.04] px-5 py-4">
+    <div className="mt-6 rounded-xl border-l-2 border-terracotta bg-terracotta/[0.06] px-5 py-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="mb-1 text-[11px] uppercase tracking-[0.12em] text-accent font-semibold">Mission</div>
+          <div className="mb-1 text-[11px] uppercase tracking-[0.12em] text-terracotta-deep font-semibold">Mission</div>
           {initialHeadline && (
             <h2 className="display text-[18px] font-semibold leading-tight text-ink">{initialHeadline}</h2>
           )}

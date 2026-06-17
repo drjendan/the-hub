@@ -61,7 +61,7 @@ export function Sidebar({
   }
 
   return (
-    <aside className="hidden md:flex w-[248px] shrink-0 flex-col border-r hairline bg-[#f3f6fb]/80 backdrop-blur sticky top-0 h-screen">
+    <aside className="hidden md:flex w-[248px] shrink-0 flex-col border-r hairline bg-[#f1f4f4]/80 backdrop-blur sticky top-0 h-screen">
       <div className="px-5 pt-6 pb-5 border-b hairline">
         <div className="flex items-center gap-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element -- product brand logo */}

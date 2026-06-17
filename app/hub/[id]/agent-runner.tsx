@@ -105,7 +105,7 @@ export function AgentRunner({
         ) : !connected ? (
           <a
             href={connectHref}
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2.5 text-[14px] font-medium text-paper hover:bg-ink-soft transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2.5 text-[14px] font-medium text-paper hover:bg-ink-line transition-colors"
           >
             <span>🔗</span> Connect Gmail
           </a>

@@ -83,7 +83,7 @@ export function HubClient({ agents }: { agents: AgentRow[] }) {
             {results.length} of {agents.length} agents · filter by creator, company, category, or status.
           </p>
         </div>
-        <Link href="/builder" className="rounded-lg bg-ink px-4 py-2.5 text-[13px] font-medium text-paper hover:bg-ink-soft transition-colors">
+        <Link href="/builder" className="rounded-lg bg-ink px-4 py-2.5 text-[13px] font-medium text-paper hover:bg-ink-line transition-colors">
           + New agent
         </Link>
       </div>

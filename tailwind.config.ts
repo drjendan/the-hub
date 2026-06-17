@@ -9,19 +9,23 @@ const config: Config = {
     extend: {
       colors: {
         ink: {
-          DEFAULT: "#141a27",   // cool navy (headings, dark surfaces)
-          soft: "#1e2638",
-          line: "#2b3446",
+          DEFAULT: "#15232c",   // primary text + dark surfaces (sidebar/buttons)
+          soft: "#5a6b73",      // muted/secondary text
+          line: "#22343f",      // "soft ink" navy — dark-button hover
         },
-        paper: "#f8fafc",       // cool near-white
+        paper: "#ffffff",       // surfaces / cards
         accent: {
-          DEFAULT: "#2b53d1",   // royal blue — matches the PrimeTDAP brand
-          soft: "#7591e6",
-          deep: "#1e3fa8",
+          DEFAULT: "#11b2ee",   // PRIMARY — logo cyan (the orange/copper is retired)
+          soft: "#6fd0f5",      // lighter cyan (e.g. icon on dark active nav)
+          deep: "#0c90c4",      // darker cyan (hover / readable cyan)
         },
-        moss: "#1d7d5f",        // approved / healthy (cool emerald)
-        rust: "#c43d3d",        // blocked / risk (clean red)
-        gold: "#b8801c",        // pending / review (amber)
+        terracotta: {
+          DEFAULT: "#e07856",   // SECONDARY pop — use sparingly (fills)
+          deep: "#b5512f",      // readable terracotta for small text
+        },
+        moss: "#1d7a4f",        // success / approved / published / live (readable green)
+        rust: "#b3261e",        // error / blocked / risk (red)
+        gold: "#b8801c",        // pending / in-review (amber)
       },
       fontFamily: {
         // Single typeface (Inter) — the design reference uses no serif and no

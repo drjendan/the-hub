@@ -321,7 +321,7 @@ export default function BuilderPage() {
           {saveErr && <p className="text-[12px] text-rust">{saveErr}</p>}
 
           <button onClick={save} disabled={saving || !name.trim()}
-            className="w-full rounded-lg bg-ink py-2.5 text-[14px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
+            className="w-full rounded-lg bg-ink py-2.5 text-[14px] font-medium text-paper hover:bg-ink-line disabled:opacity-40 transition-colors">
             {saving ? "Saving…" : requiresReview ? "Submit for review" : "Save & publish"}
           </button>
         </div>
