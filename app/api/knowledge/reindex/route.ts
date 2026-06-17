@@ -7,6 +7,28 @@ export const runtime = "nodejs";
 
 type Chunk = { source_type: string; source_title: string; content: string };
 
+/** Split long document text into ~1200-char chunks on paragraph boundaries. */
+function chunkText(text: string, maxLen = 1200): string[] {
+  const clean = text.replace(/\r/g, "").trim();
+  if (!clean) return [];
+  if (clean.length <= maxLen) return [clean];
+  const chunks: string[] = [];
+  let cur = "";
+  for (const para of clean.split(/\n{2,}/)) {
+    let p = para;
+    while (p.length > maxLen) {
+      // hard-split a single oversized paragraph
+      if (cur) { chunks.push(cur.trim()); cur = ""; }
+      chunks.push(p.slice(0, maxLen));
+      p = p.slice(maxLen);
+    }
+    if ((cur + "\n\n" + p).length > maxLen && cur) { chunks.push(cur.trim()); cur = p; }
+    else cur = cur ? cur + "\n\n" + p : p;
+  }
+  if (cur.trim()) chunks.push(cur.trim());
+  return chunks;
+}
+
 /**
  * POST /api/knowledge/reindex
  * (Re)builds the org's RAG corpus from its governance knowledge — active
@@ -19,10 +41,11 @@ export async function POST() {
   const orgId = admin.orgId;
   const supabase = createClient();
 
-  const [{ data: pol }, { data: bp }, { data: packs }] = await Promise.all([
+  const [{ data: pol }, { data: bp }, { data: packs }, { data: docs }] = await Promise.all([
     supabase.from("policies").select("title, body").eq("organization_id", orgId).eq("active", true),
     supabase.from("best_practices").select("title, body").eq("organization_id", orgId),
     supabase.from("org_compliance_packs").select("pack:compliance_packs(name, requirements)").eq("organization_id", orgId),
+    supabase.from("knowledge_documents").select("title, content").eq("organization_id", orgId),
   ]);
 
   const chunks: Chunk[] = [];
@@ -37,6 +60,11 @@ export async function POST() {
     if (!pack) continue;
     const reqs = Array.isArray(pack.requirements) ? pack.requirements : [];
     for (const r of reqs) chunks.push({ source_type: "compliance", source_title: pack.name, content: `${pack.name} requirement: ${r}` });
+  }
+  for (const d of docs || []) {
+    for (const piece of chunkText((d.content as string) || "")) {
+      chunks.push({ source_type: "document", source_title: d.title, content: piece });
+    }
   }
 
   // Clear-and-replace. If there's nothing to index, just clear.

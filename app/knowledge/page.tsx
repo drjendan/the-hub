@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getUser, ensureProfile, getOrgsForUser, getCurrentOrgId } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { KnowledgeClient, type Entry, type Pack } from "./knowledge-client";
+import { KnowledgeClient, type Entry, type Pack, type Doc } from "./knowledge-client";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +27,12 @@ export default async function KnowledgePage() {
   const supabase = createClient();
   // All fetches are resilient: a missing table (governance_kb.sql not run) just
   // yields an empty list rather than crashing the page.
-  const [{ data: pol }, { data: bp }, { data: packRows }, { data: enabled }] = await Promise.all([
+  const [{ data: pol }, { data: bp }, { data: packRows }, { data: enabled }, { data: docRows }] = await Promise.all([
     supabase.from("policies").select("id, title, body, category, active, created_at").eq("organization_id", orgId).order("created_at", { ascending: false }),
     supabase.from("best_practices").select("id, title, body, category, created_at").eq("organization_id", orgId).order("created_at", { ascending: false }),
     supabase.from("compliance_packs").select("id, key, name, description, industry, requirements").order("name", { ascending: true }),
     supabase.from("org_compliance_packs").select("pack_id").eq("organization_id", orgId),
+    supabase.from("knowledge_documents").select("id, title, filename, created_at").eq("organization_id", orgId).order("created_at", { ascending: false }),
   ]);
 
   const policies: Entry[] = (pol || []).map((p) => ({
@@ -45,6 +46,9 @@ export default async function KnowledgePage() {
     requirements: Array.isArray(p.requirements) ? (p.requirements as string[]) : [],
   }));
   const enabledPackIds = (enabled || []).map((e) => e.pack_id as string);
+  const documents: Doc[] = (docRows || []).map((d) => ({
+    id: d.id, title: d.title, filename: d.filename, created_at: d.created_at,
+  }));
 
   // RAG corpus size (resilient: 0 if rag.sql hasn't been run).
   const { count: chunkCount } = await supabase
@@ -58,6 +62,7 @@ export default async function KnowledgePage() {
       bestPractices={bestPractices}
       packs={packs}
       enabledPackIds={enabledPackIds}
+      documents={documents}
       chunkCount={chunkCount ?? 0}
       canManage={!!canManage}
       orgName={currentOrg?.name || ""}

@@ -64,10 +64,13 @@ export function Sidebar({
     <aside className="hidden md:flex w-[248px] shrink-0 flex-col border-r hairline bg-[#f3f6fb]/80 backdrop-blur sticky top-0 h-screen">
       <div className="px-5 pt-6 pb-5 border-b hairline">
         <div className="flex items-center gap-2.5">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink text-paper text-lg">⬡</div>
+          {/* eslint-disable-next-line @next/next/no-img-element -- product brand logo */}
+          <img src="/the-hub-logo.png" alt="The Hub" className="h-9 w-9 shrink-0 rounded-xl object-contain" />
           <div className="leading-tight flex-1 min-w-0">
-            <div className="display text-[15px] font-semibold">Agent Hub</div>
-            <div className="text-[11px] text-ink-soft tracking-wide">ENTERPRISE</div>
+            <div className="display text-[20px] font-bold leading-none">The Hub</div>
+            <div className="mt-1 text-[10px] uppercase tracking-[0.14em] text-ink-soft/70">
+              Apps · Agents · Governance
+            </div>
           </div>
           {currentOrg?.logo_url && (
             // eslint-disable-next-line @next/next/no-img-element -- user-uploaded company logo

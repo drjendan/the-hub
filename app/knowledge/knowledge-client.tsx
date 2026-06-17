@@ -21,10 +21,18 @@ export interface Pack {
   requirements: string[];
 }
 
+export interface Doc {
+  id: string;
+  title: string;
+  filename: string | null;
+  created_at: string;
+}
+
 const TABS = [
   { id: "policies", label: "Policies" },
   { id: "best", label: "Best Practices" },
   { id: "compliance", label: "Compliance Packs" },
+  { id: "documents", label: "Documents" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -33,6 +41,7 @@ export function KnowledgeClient({
   bestPractices,
   packs,
   enabledPackIds,
+  documents,
   chunkCount,
   canManage,
   orgName,
@@ -41,6 +50,7 @@ export function KnowledgeClient({
   bestPractices: Entry[];
   packs: Pack[];
   enabledPackIds: string[];
+  documents: Doc[];
   chunkCount: number;
   canManage: boolean;
   orgName: string;
@@ -82,6 +92,85 @@ export function KnowledgeClient({
       {tab === "compliance" && (
         <ComplianceSection packs={packs} enabledPackIds={enabledPackIds} canManage={canManage} />
       )}
+      {tab === "documents" && <DocumentsSection documents={documents} canManage={canManage} />}
+    </div>
+  );
+}
+
+function DocumentsSection({ documents, canManage }: { documents: Doc[]; canManage: boolean }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+
+  async function upload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/knowledge/documents", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg({ tone: "err", text: data.error || "Upload failed." });
+        return;
+      }
+      setMsg({ tone: "ok", text: `Added “${data.title}”. Click Sync knowledge above to embed it.` });
+      router.refresh();
+    } finally {
+      setBusy(false);
+      e.target.value = "";
+    }
+  }
+
+  async function remove(id: string) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await fetch("/api/knowledge/documents", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 space-y-3">
+      {canManage && (
+        <div className="card p-4">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-paper hover:bg-ink-soft transition-colors">
+            {busy ? "Uploading…" : "Upload PDF or Word (.docx)"}
+            <input type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              className="hidden" onChange={upload} disabled={busy} />
+          </label>
+          <span className="ml-3 text-[12px] text-ink-soft">≤ 4 MB · text is extracted server-side. Re-Sync after uploading.</span>
+          {msg && <p className={`mt-2 text-[12px] ${msg.tone === "ok" ? "text-moss" : "text-rust"}`}>{msg.text}</p>}
+        </div>
+      )}
+
+      {documents.length === 0 && (
+        <div className="card p-8 text-center text-[14px] text-ink-soft">
+          No documents yet. Upload PDFs or Word docs to ground agents in their content.
+        </div>
+      )}
+      {documents.map((d) => (
+        <div key={d.id} className="card p-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-[15px] font-semibold truncate">{d.title}</h3>
+            <div className="text-[12px] text-ink-soft truncate">{d.filename || "—"}</div>
+          </div>
+          {canManage && (
+            <button onClick={() => remove(d.id)} disabled={busy} className="shrink-0 text-[12px] text-rust hover:underline disabled:opacity-40">
+              Delete
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
