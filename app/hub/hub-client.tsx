@@ -206,6 +206,9 @@ function AgentCard({ agent: a, multiCompany }: { agent: AgentRow; multiCompany: 
             <span className="shrink-0">{fmtDate(a.created_at)}</span>
           </div>
           {multiCompany && <div className="mt-1 truncate">{a.org_name}</div>}
+          {a.status === "published" && (
+            <div className="mt-2 text-[12px] font-medium text-accent">Run ▷</div>
+          )}
         </div>
       </Link>
       {a.can_delete && (

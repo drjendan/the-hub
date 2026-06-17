@@ -161,5 +161,15 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     })
   );
 
+  // Persist the run (best-effort) so it shows in history alongside text runs.
+  await supabase.from("agent_runs").insert({
+    organization_id: agent.organization_id,
+    agent_id: agent.id,
+    user_id: user.id,
+    kind: "gmail",
+    input: `Inbox scan (${messages.length} message${messages.length === 1 ? "" : "s"})`,
+    output: JSON.stringify(results),
+  });
+
   return NextResponse.json({ account_email: conn.account_email, results });
 }

@@ -6,6 +6,7 @@ import { googleOAuthConfigured } from "@/lib/google";
 import { StatusBadge, RiskTag } from "@/components/ui";
 import { connectorLabel } from "@/lib/connectors";
 import { AgentRunner } from "./agent-runner";
+import { GenericRunner } from "./generic-runner";
 import { AgentActions } from "./agent-actions";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +54,10 @@ export default async function AgentProfile({ params }: { params: { id: string } 
     : { data: null };
   const oauthConfigured = googleOAuthConfigured();
   const showRunner = oauthConfigured || Boolean(conn);
+  // Gmail-connector agents use the inbox runner; connector-less agents get the
+  // generic text runner (only once published — the run route enforces this too).
+  const hasGmail = connectors.includes("gmail");
+  const isPublished = agent.status === "published";
 
   // Delete permission (also enforced server-side in /api/agents DELETE):
   // an admin/builder of the company, or the agent's owner.
@@ -95,15 +100,23 @@ export default async function AgentProfile({ params }: { params: { id: string } 
 
       <div className="mt-6 grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {showRunner && (
-            <AgentRunner
-              agentId={agent.id}
-              agentSlug={agent.slug}
-              oauthConfigured={oauthConfigured}
-              connected={Boolean(conn)}
-              accountEmail={conn?.account_email ?? null}
-              connectionId={conn?.id ?? null}
-            />
+          {hasGmail ? (
+            showRunner && (
+              <AgentRunner
+                agentId={agent.id}
+                agentSlug={agent.slug}
+                oauthConfigured={oauthConfigured}
+                connected={Boolean(conn)}
+                accountEmail={conn?.account_email ?? null}
+                connectionId={conn?.id ?? null}
+              />
+            )
+          ) : isPublished ? (
+            <GenericRunner agentId={agent.id} />
+          ) : (
+            <section className="card p-5 text-[13px] text-ink-soft">
+              This agent must be published before it can be run.
+            </section>
           )}
 
           {/* Capabilities */}

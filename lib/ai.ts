@@ -111,24 +111,35 @@ export interface GenerateJSONArgs {
  * Throws on transport/parse failure so callers can fall back gracefully.
  */
 export async function generateJSON<T = unknown>(args: GenerateJSONArgs): Promise<T> {
+  const raw = await callProvider(args, true);
+  const cleaned = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
+  return JSON.parse(cleaned) as T;
+}
+
+/**
+ * Free-form text completion (no JSON forcing). Powers the generic agent run
+ * path for connector-less, text-in/text-out agents (e.g. a notes summarizer).
+ */
+export async function generateText(args: GenerateJSONArgs): Promise<string> {
+  const raw = await callProvider(args, false);
+  return raw.trim();
+}
+
+/** Shared dispatch: resolves key/model then calls the provider in JSON or text mode. */
+function callProvider(args: GenerateJSONArgs, json: boolean): Promise<string> {
   const { provider } = args;
   const apiKey = args.apiKey || keyFor(provider);
   if (!apiKey) throw new Error(`No API key configured for provider "${provider}"`);
   const model = args.model || modelFor(provider);
-
-  let raw: string;
-  if (provider === "openai") raw = await callOpenAI(apiKey, model, args);
-  else if (provider === "anthropic") raw = await callAnthropic(apiKey, model, args);
-  else raw = await callGoogle(apiKey, model, args);
-
-  const cleaned = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
-  return JSON.parse(cleaned) as T;
+  if (provider === "openai") return callOpenAI(apiKey, model, args, json);
+  if (provider === "anthropic") return callAnthropic(apiKey, model, args, json);
+  return callGoogle(apiKey, model, args, json);
 }
 
 // --------------------------------------------------------------------
 // OpenAI — Chat Completions
 // --------------------------------------------------------------------
-async function callOpenAI(apiKey: string, model: string, args: GenerateJSONArgs): Promise<string> {
+async function callOpenAI(apiKey: string, model: string, args: GenerateJSONArgs, json: boolean): Promise<string> {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -137,7 +148,7 @@ async function callOpenAI(apiKey: string, model: string, args: GenerateJSONArgs)
       temperature: args.temperature ?? 0.3,
       max_tokens: args.maxTokens ?? 900,
       store: false, // opt out of server-side retention
-      response_format: { type: "json_object" },
+      ...(json ? { response_format: { type: "json_object" } } : {}),
       messages: [
         { role: "system", content: args.system },
         { role: "user", content: args.user },
@@ -146,13 +157,13 @@ async function callOpenAI(apiKey: string, model: string, args: GenerateJSONArgs)
   });
   if (!res.ok) throw new Error(`OpenAI ${res.status}: ${await res.text()}`);
   const data = await res.json();
-  return data?.choices?.[0]?.message?.content ?? "{}";
+  return data?.choices?.[0]?.message?.content ?? (json ? "{}" : "");
 }
 
 // --------------------------------------------------------------------
 // Anthropic — Messages API
 // --------------------------------------------------------------------
-async function callAnthropic(apiKey: string, model: string, args: GenerateJSONArgs): Promise<string> {
+async function callAnthropic(apiKey: string, model: string, args: GenerateJSONArgs, json: boolean): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -164,7 +175,7 @@ async function callAnthropic(apiKey: string, model: string, args: GenerateJSONAr
       model,
       max_tokens: args.maxTokens ?? 900,
       temperature: args.temperature ?? 0.3,
-      system: args.system + " Respond with a single valid JSON object and nothing else.",
+      system: json ? args.system + " Respond with a single valid JSON object and nothing else." : args.system,
       messages: [{ role: "user", content: args.user }],
     }),
   });
@@ -173,19 +184,19 @@ async function callAnthropic(apiKey: string, model: string, args: GenerateJSONAr
   const block = Array.isArray(data?.content)
     ? data.content.find((b: { type?: string }) => b.type === "text")
     : null;
-  return block?.text ?? "{}";
+  return block?.text ?? (json ? "{}" : "");
 }
 
 // --------------------------------------------------------------------
 // Google — Gemini generateContent
 // --------------------------------------------------------------------
-async function callGoogle(apiKey: string, model: string, args: GenerateJSONArgs): Promise<string> {
+async function callGoogle(apiKey: string, model: string, args: GenerateJSONArgs, json: boolean): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const generationConfig: Record<string, unknown> = {
     temperature: args.temperature ?? 0.3,
     maxOutputTokens: args.maxTokens ?? 900,
-    responseMimeType: "application/json",
+    ...(json ? { responseMimeType: "application/json" } : {}),
   };
   // Gemini 2.5 models "think" by default, which burns the output-token budget
   // (often leaving no room for the JSON answer). Disable it for deterministic,
@@ -208,7 +219,7 @@ async function callGoogle(apiKey: string, model: string, args: GenerateJSONArgs)
     });
     if (res.ok) {
       const data = await res.json();
-      return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+      return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? (json ? "{}" : "");
     }
     lastErr = `Google ${res.status}: ${await res.text()}`;
     if ((res.status === 429 || res.status === 500 || res.status === 503) && attempt < 2) {
