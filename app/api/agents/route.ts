@@ -144,6 +144,32 @@ export async function POST(req: Request) {
     });
   }
 
+  // Per-agent access. Default 'everyone'; if restricted, set visibility + assign
+  // members. Best-effort so agent creation still works before agent_access.sql is
+  // applied (the agent simply stays 'everyone' until then).
+  if (body.visibility === "restricted") {
+    await supabase.from("agents").update({ visibility: "restricted" }).eq("id", agent.id);
+    const requestedIds = asStringArray(body.assigned_user_ids);
+    if (requestedIds.length) {
+      const { data: members } = await supabase
+        .from("org_members")
+        .select("user_id")
+        .eq("organization_id", orgId)
+        .in("user_id", requestedIds);
+      const validIds = (members || []).map((m) => m.user_id as string);
+      if (validIds.length) {
+        await supabase.from("agent_access").insert(
+          validIds.map((uid) => ({
+            agent_id: agent.id,
+            user_id: uid,
+            organization_id: orgId,
+            granted_by: user.id,
+          }))
+        );
+      }
+    }
+  }
+
   return NextResponse.json({ id: agent.id, slug: agent.slug, status });
 }
 

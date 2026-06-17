@@ -35,6 +35,9 @@ export default function BuilderPage() {
   const [risk, setRisk] = useState<RiskTier>("low");
   const [connectors, setConnectors] = useState<string[]>([]);
   const [capabilities, setCapabilities] = useState<string[]>([]);
+  const [visibility, setVisibility] = useState<"everyone" | "restricted">("everyone");
+  const [assigned, setAssigned] = useState<string[]>([]);
+  const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
 
   // Save state
   const [saving, setSaving] = useState(false);
@@ -58,9 +61,18 @@ export default function BuilderPage() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    fetch("/api/org/members")
+      .then((r) => r.json())
+      .then((d) => setMembers(d.members || []))
+      .catch(() => {});
+  }, []);
+
   const requiresReview = risk === "high" || risk === "restricted";
   const toggleConnector = (key: string) =>
     setConnectors((arr) => (arr.includes(key) ? arr.filter((x) => x !== key) : [...arr, key]));
+  const toggleAssigned = (id: string) =>
+    setAssigned((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
 
   async function suggestWithAI() {
     setAiError(null);
@@ -115,6 +127,8 @@ export default function BuilderPage() {
           risk,
           connectors,
           capabilities,
+          visibility,
+          assigned_user_ids: visibility === "restricted" ? assigned : [],
         }),
       });
       const data = await res.json();
@@ -239,6 +253,37 @@ export default function BuilderPage() {
             <p className="mt-2 text-[11px] text-ink-soft">
               Connectors are stored with the agent. Actual execution is wired up later.
             </p>
+          </Field>
+
+          <Field label="Visibility">
+            <div className="flex gap-1 rounded-lg border hairline bg-white p-1 w-full max-w-xs">
+              {(["everyone", "restricted"] as const).map((v) => (
+                <button key={v} type="button" onClick={() => setVisibility(v)}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-[12px] capitalize transition-colors ${
+                    visibility === v ? "bg-ink text-paper" : "text-ink-soft hover:text-ink"
+                  }`}>
+                  {v}
+                </button>
+              ))}
+            </div>
+            {visibility === "restricted" ? (
+              <div className="mt-2">
+                <p className="text-[11px] text-ink-soft mb-1.5">
+                  Only you (owner) and assigned people can see and run this agent. Company admins always have access.
+                </p>
+                <div className="max-h-44 overflow-y-auto rounded-lg border hairline divide-y divide-[var(--line)]">
+                  {members.map((m) => (
+                    <label key={m.id} className="flex items-center gap-2 px-3 py-2 text-[13px] cursor-pointer hover:bg-black/[0.02]">
+                      <input type="checkbox" checked={assigned.includes(m.id)} onChange={() => toggleAssigned(m.id)} className="accent-[var(--accent)]" />
+                      {m.name}
+                    </label>
+                  ))}
+                  {members.length === 0 && <div className="px-3 py-2 text-[12px] text-ink-soft">No other members in this company.</div>}
+                </div>
+              </div>
+            ) : (
+              <p className="mt-2 text-[11px] text-ink-soft">All company members can see and run this agent.</p>
+            )}
           </Field>
         </div>
 

@@ -1,13 +1,24 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, ensureProfile } from "@/lib/auth";
+import { getUser, ensureProfile, getOrgsForUser } from "@/lib/auth";
 import { googleOAuthConfigured } from "@/lib/google";
 import { StatusBadge, RiskTag } from "@/components/ui";
 import { connectorLabel } from "@/lib/connectors";
 import { AgentRunner } from "./agent-runner";
 import { GenericRunner } from "./generic-runner";
 import { AgentActions } from "./agent-actions";
+import { AccessManager } from "./access-manager";
+
+type SimpleMember = { id: string; name: string };
+function mapMembers(rows: { user: unknown }[] | null): SimpleMember[] {
+  return (rows || [])
+    .map((r) => {
+      const u = r.user as unknown as { id: string; full_name: string | null; email: string | null } | null;
+      return u ? { id: u.id, name: u.full_name || u.email || "Unknown" } : null;
+    })
+    .filter((m): m is SimpleMember => m !== null);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +76,25 @@ export default async function AgentProfile({ params }: { params: { id: string } 
   const canManage = profile?.app_role === "admin" || profile?.app_role === "builder";
   const canDelete = canManage || (!!user && agent.owner_id === user.id);
 
+  // Access management (owner / global admin / company owner). agent.visibility is
+  // present once agent_access.sql is applied; absent → treat as 'everyone'.
+  const orgs = user ? await getOrgsForUser() : [];
+  const isOrgOwner = orgs.some((o) => o.id === agent.organization_id && o.org_role === "owner");
+  const canManageAccess =
+    profile?.app_role === "admin" || isOrgOwner || (!!user && agent.owner_id === user.id);
+  const visibility: "everyone" | "restricted" = agent.visibility === "restricted" ? "restricted" : "everyone";
+
+  let assignedMembers: SimpleMember[] = [];
+  let orgMembers: SimpleMember[] = [];
+  if (canManageAccess) {
+    const [{ data: accessRows }, { data: memberRows }] = await Promise.all([
+      supabase.from("agent_access").select("user:profiles(id, full_name, email)").eq("agent_id", agent.id),
+      supabase.from("org_members").select("user:profiles(id, full_name, email)").eq("organization_id", agent.organization_id),
+    ]);
+    assignedMembers = mapMembers(accessRows);
+    orgMembers = mapMembers(memberRows);
+  }
+
   return (
     <div className="px-6 sm:px-10 py-8 max-w-5xl mx-auto">
       <Link href="/hub" className="text-[13px] text-accent hover:underline">← Back to Library</Link>
@@ -83,6 +113,9 @@ export default async function AgentProfile({ params }: { params: { id: string } 
           <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] text-ink-soft">
             <span>{agent.category}</span>
             <RiskTag risk={agent.risk} />
+            {visibility === "restricted" && (
+              <span className="rounded-full bg-gold/10 px-2 py-0.5 text-[11px] font-medium text-gold">Restricted</span>
+            )}
             <span>Created by · <span className="text-ink font-medium">{ownerName}</span></span>
             <span>{fmtDate(agent.created_at)}</span>
             {org && <span>{org.name}</span>}
@@ -163,6 +196,15 @@ export default async function AgentProfile({ params }: { params: { id: string } 
 
         {/* Sidebar facts */}
         <div className="space-y-4">
+          {canManageAccess && (
+            <AccessManager
+              agentId={agent.id}
+              ownerName={ownerName}
+              initialVisibility={visibility}
+              initialAssigned={assignedMembers}
+              members={orgMembers}
+            />
+          )}
           <div className="card p-5">
             <h3 className="text-[12px] uppercase tracking-[0.12em] text-ink-soft mb-3">At a glance</h3>
             <dl className="space-y-3 text-[13px]">

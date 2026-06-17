@@ -24,10 +24,21 @@ export interface Agent {
   capabilities: string[];
   tools: string[];
   connectors: string[];
+  visibility: "everyone" | "restricted";
   avg_rating: number;
   deployments: number;
   created_at: string;
   updated_at: string;
+}
+
+// Per-agent access grant (restricted agents); see supabase/agent_access.sql.
+export interface AgentAccess {
+  id: string;
+  agent_id: string;
+  user_id: string;
+  organization_id: string;
+  granted_by: string | null;
+  created_at: string;
 }
 
 export interface Organization {
