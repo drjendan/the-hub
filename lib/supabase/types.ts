@@ -31,6 +31,35 @@ export interface Agent {
   updated_at: string;
 }
 
+// Governance knowledge base; see supabase/governance_kb.sql.
+export interface Policy {
+  id: string;
+  organization_id: string;
+  title: string;
+  body: string | null;
+  category: string | null;
+  active: boolean;
+  created_at: string;
+}
+
+export interface BestPractice {
+  id: string;
+  organization_id: string;
+  title: string;
+  body: string | null;
+  category: string | null;
+  created_at: string;
+}
+
+export interface CompliancePack {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  industry: string | null;
+  requirements: string[];
+}
+
 // Per-agent access grant (restricted agents); see supabase/agent_access.sql.
 export interface AgentAccess {
   id: string;

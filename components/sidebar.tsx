@@ -12,7 +12,8 @@ const NAV = [
   { href: "/intake/role", label: "Role Match", glyph: "⊹" },
   { href: "/builder", label: "Builder", glyph: "✎" },
   { href: "/sessions", label: "Sessions", glyph: "❖" },
-  { href: "/governance", label: "Governance", glyph: "§" },
+  { href: "/knowledge", label: "Governance", glyph: "⚖" },
+  { href: "/governance", label: "Approvals", glyph: "§" },
   { href: "/analytics", label: "Analytics", glyph: "▤" },
 ];
 

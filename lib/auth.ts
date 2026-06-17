@@ -218,3 +218,20 @@ export async function requireOrgOwner(): Promise<{ user: User; orgId: string }> 
   if (!owner) redirect("/");
   return owner;
 }
+
+/**
+ * Non-redirecting "company admin" check: a global admin OR the owner of the
+ * caller's active organization. Used to gate per-company governance-knowledge
+ * management. Returns the user + active org id, or null.
+ */
+export async function currentOrgAdmin(): Promise<{ user: User; orgId: string } | null> {
+  const user = await getUser();
+  if (!user) return null;
+  const profile = await ensureProfile(user);
+  const orgs = await getOrgsForUser();
+  const orgId = await getCurrentOrgId(orgs, profile);
+  if (!orgId) return null;
+  const isAdmin = profile.app_role === "admin";
+  const isOwner = orgs.some((o) => o.id === orgId && o.org_role === "owner");
+  return isAdmin || isOwner ? { user, orgId } : null;
+}
