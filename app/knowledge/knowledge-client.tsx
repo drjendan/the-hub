@@ -33,6 +33,7 @@ export function KnowledgeClient({
   bestPractices,
   packs,
   enabledPackIds,
+  chunkCount,
   canManage,
   orgName,
 }: {
@@ -40,6 +41,7 @@ export function KnowledgeClient({
   bestPractices: Entry[];
   packs: Pack[];
   enabledPackIds: string[];
+  chunkCount: number;
   canManage: boolean;
   orgName: string;
 }) {
@@ -55,6 +57,8 @@ export function KnowledgeClient({
           {!canManage && " (Read-only — company admins manage this.)"}
         </p>
       </div>
+
+      {canManage && <SyncBar chunkCount={chunkCount} />}
 
       <div className="mt-6 flex gap-1 rounded-lg border hairline bg-white p-1 w-fit">
         {TABS.map((t) => (
@@ -78,6 +82,45 @@ export function KnowledgeClient({
       {tab === "compliance" && (
         <ComplianceSection packs={packs} enabledPackIds={enabledPackIds} canManage={canManage} />
       )}
+    </div>
+  );
+}
+
+function SyncBar({ chunkCount }: { chunkCount: number }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+
+  async function sync() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/knowledge/reindex", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg({ tone: "err", text: data.error || "Sync failed." });
+        return;
+      }
+      setMsg({ tone: "ok", text: data.count ? `Indexed ${data.count} item${data.count === 1 ? "" : "s"} for AI grounding.` : (data.message || "Nothing to index.") });
+      router.refresh();
+    } catch {
+      setMsg({ tone: "err", text: "Could not reach the server." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border hairline bg-accent/[0.03] px-4 py-2.5">
+      <span className="text-[13px] text-ink-soft">
+        <span className="font-medium text-ink">AI grounding (RAG)</span> · {chunkCount} item{chunkCount === 1 ? "" : "s"} indexed
+      </span>
+      <button onClick={sync} disabled={busy}
+        className="rounded-lg bg-ink px-3 py-1.5 text-[12px] font-medium text-paper hover:bg-ink-soft disabled:opacity-40 transition-colors">
+        {busy ? "Syncing…" : "Sync knowledge"}
+      </button>
+      <span className="text-[12px] text-ink-soft">Re-run after changing policies, best practices, or packs.</span>
+      {msg && <span className={`text-[12px] ${msg.tone === "ok" ? "text-moss" : "text-rust"}`}>{msg.text}</span>}
     </div>
   );
 }

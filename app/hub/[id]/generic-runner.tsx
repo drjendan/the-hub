@@ -10,6 +10,7 @@ export function GenericRunner({ agentId }: { agentId: string }) {
   const [input, setInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [output, setOutput] = useState<string | null>(null);
+  const [sources, setSources] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -17,6 +18,7 @@ export function GenericRunner({ agentId }: { agentId: string }) {
   async function run() {
     setError(null);
     setOutput(null);
+    setSources([]);
     setNote(null);
     setRunning(true);
     try {
@@ -30,6 +32,7 @@ export function GenericRunner({ agentId }: { agentId: string }) {
         return;
       }
       setOutput(data.output ?? "");
+      setSources(Array.isArray(data.sources) ? data.sources : []);
       if (data.truncated) setNote("Input was long — it was truncated before running.");
     } catch {
       setError("Could not reach the server.");
@@ -98,6 +101,14 @@ export function GenericRunner({ agentId }: { agentId: string }) {
           <div className="rounded-lg border hairline bg-white p-3 text-[14px] leading-relaxed whitespace-pre-wrap">
             {output}
           </div>
+          {sources.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-soft">
+              <span>Grounded in:</span>
+              {sources.map((s) => (
+                <span key={s} className="rounded-md bg-accent/10 px-2 py-0.5 text-accent">{s}</span>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </section>

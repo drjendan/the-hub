@@ -3,6 +3,7 @@ import { getUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { resolveProvider, generateText, type AIProvider } from "@/lib/ai";
 import { getOrgProviderKey } from "@/lib/provider-keys";
+import { embedQuery } from "@/lib/embeddings";
 
 export const runtime = "nodejs";
 
@@ -130,13 +131,40 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     provider = platform;
   }
 
+  // RAG grounding (best-effort): retrieve relevant governance-knowledge chunks
+  // for this org and inject them as context. Silently skipped if RAG isn't set
+  // up, there's no OpenAI key, or nothing has been indexed.
+  let groundedSystem = systemPrompt;
+  let groundingSources: string[] = [];
+  try {
+    const qvec = await embedQuery(agent.organization_id, inputText);
+    if (qvec) {
+      const { data: matches } = await supabase.rpc("match_knowledge", {
+        query_embedding: JSON.stringify(qvec),
+        org: agent.organization_id,
+        match_count: 5,
+      });
+      const relevant = ((matches as { content: string; source_title: string; similarity: number }[] | null) || [])
+        .filter((m) => m.similarity > 0.2);
+      if (relevant.length) {
+        const ctx = relevant.map((m) => `- [${m.source_title}] ${m.content}`).join("\n");
+        groundedSystem =
+          `${systemPrompt}\n\nRelevant context from the company's governance knowledge base. ` +
+          `Ground your answer in this where applicable, and cite the source title in [brackets] when you use it:\n${ctx}`;
+        groundingSources = Array.from(new Set(relevant.map((m) => m.source_title)));
+      }
+    }
+  } catch {
+    // RAG is optional — never block a run on retrieval problems.
+  }
+
   let output: string;
   try {
     output = await generateText({
       provider,
       apiKey: apiKeyOverride,
       model: modelOverride,
-      system: systemPrompt,
+      system: groundedSystem,
       user: inputText,
       temperature: 0.3,
       maxTokens: 1500,
@@ -165,7 +193,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     source,
     input: `${label}${truncated ? " · truncated" : ""}\n${inputText.slice(0, 500)}`,
     output,
+    citations: groundingSources.length ? groundingSources : null,
   });
 
-  return NextResponse.json({ output, source, truncated });
+  return NextResponse.json({ output, source, truncated, sources: groundingSources });
 }

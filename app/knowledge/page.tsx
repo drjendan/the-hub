@@ -46,12 +46,19 @@ export default async function KnowledgePage() {
   }));
   const enabledPackIds = (enabled || []).map((e) => e.pack_id as string);
 
+  // RAG corpus size (resilient: 0 if rag.sql hasn't been run).
+  const { count: chunkCount } = await supabase
+    .from("knowledge_chunks")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", orgId);
+
   return (
     <KnowledgeClient
       policies={policies}
       bestPractices={bestPractices}
       packs={packs}
       enabledPackIds={enabledPackIds}
+      chunkCount={chunkCount ?? 0}
       canManage={!!canManage}
       orgName={currentOrg?.name || ""}
     />

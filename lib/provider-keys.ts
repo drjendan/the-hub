@@ -84,6 +84,26 @@ export async function getOrgProviderKey(orgId: string): Promise<ResolvedTenantKe
   return null;
 }
 
+/**
+ * Decrypted key for a SPECIFIC provider for an org (vs. getOrgProviderKey which
+ * returns the preferred one). Used by embeddings to find the org's OpenAI key.
+ */
+export async function getOrgKeyForProvider(orgId: string, provider: AIProvider): Promise<string | null> {
+  const db = createAdminClient();
+  const { data } = await db
+    .from("org_provider_keys")
+    .select("encrypted_key")
+    .eq("organization_id", orgId)
+    .eq("provider", provider)
+    .maybeSingle();
+  if (!data) return null;
+  try {
+    return decryptSecret(data.encrypted_key);
+  } catch {
+    return null;
+  }
+}
+
 /** Persist (insert or update) an org's key. Service-role; caller MUST be owner. */
 export async function saveOrgProviderKey(args: {
   orgId: string;
