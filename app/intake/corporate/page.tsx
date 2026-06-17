@@ -70,7 +70,7 @@ export default function CorporateIntake() {
     <div className="px-6 sm:px-10 py-8 max-w-3xl mx-auto">
       <div className="border-b hairline pb-6">
         <div className="mb-1.5 text-[11px] uppercase tracking-[0.16em] text-accent font-semibold">Setup</div>
-        <h1 className="display text-[30px] font-semibold leading-none">Corporate intake</h1>
+        <h1 className="display text-[30px] font-semibold leading-none">Corporate Intake</h1>
         <p className="mt-2 text-[14px] text-ink-soft">
           Record your company profile, goals, and compliance needs. This is saved against your
           current company to inform governance posture. (Companies themselves are created by your

@@ -17,7 +17,7 @@ const NAV = [
   { href: "/analytics", label: "Analytics", glyph: "▤" },
 ];
 
-const SECONDARY = [{ href: "/intake/corporate", label: "Corporate intake" }];
+const SECONDARY = [{ href: "/intake/corporate", label: "Corporate Intake" }];
 
 interface OrgRef {
   id: string;
@@ -137,7 +137,7 @@ export function Sidebar({
               active("/settings") ? "text-ink font-medium" : "text-ink-soft hover:text-ink"
             }`}
           >
-            AI provider keys
+            AI Provider Keys
           </Link>
         )}
         {isAdmin && (
@@ -147,7 +147,7 @@ export function Sidebar({
               active("/admin") ? "text-ink font-medium" : "text-ink-soft hover:text-ink"
             }`}
           >
-            Companies &amp; users
+            Companies &amp; Users
           </Link>
         )}
       </nav>

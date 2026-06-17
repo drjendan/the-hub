@@ -120,7 +120,7 @@ export default function RoleMatchPage() {
 
       <p className="mt-6 text-[12px] text-ink-soft">
         Need a different intake?{" "}
-        <Link href="/intake/corporate" className="text-accent hover:underline">Corporate intake</Link>.
+        <Link href="/intake/corporate" className="text-accent hover:underline">Corporate Intake</Link>.
       </p>
     </div>
   );

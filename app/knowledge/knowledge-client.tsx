@@ -23,8 +23,8 @@ export interface Pack {
 
 const TABS = [
   { id: "policies", label: "Policies" },
-  { id: "best", label: "Best practices" },
-  { id: "compliance", label: "Compliance packs" },
+  { id: "best", label: "Best Practices" },
+  { id: "compliance", label: "Compliance Packs" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -49,7 +49,7 @@ export function KnowledgeClient({
     <div className="px-6 sm:px-10 py-8 max-w-4xl mx-auto">
       <div className="border-b hairline pb-6">
         <div className="mb-1.5 text-[11px] uppercase tracking-[0.16em] text-accent font-semibold">Governance · knowledge</div>
-        <h1 className="display text-[30px] font-semibold leading-none">Knowledge base</h1>
+        <h1 className="display text-[30px] font-semibold leading-none">Knowledge Base</h1>
         <p className="mt-2 text-[14px] text-ink-soft">
           {orgName ? `${orgName}'s ` : ""}guiding rules, best practices, and compliance — reference for building agents.
           {!canManage && " (Read-only — company admins manage this.)"}

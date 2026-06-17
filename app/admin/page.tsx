@@ -59,7 +59,7 @@ export default async function AdminPage() {
     <div className="px-6 sm:px-10 py-8 max-w-5xl mx-auto">
       <div className="border-b hairline pb-6">
         <div className="mb-1.5 text-[11px] uppercase tracking-[0.16em] text-accent font-semibold">Provider admin</div>
-        <h1 className="display text-[30px] font-semibold leading-none">Companies &amp; users</h1>
+        <h1 className="display text-[30px] font-semibold leading-none">Companies &amp; Users</h1>
         <p className="mt-2 max-w-xl text-[14px] text-ink-soft">
           Create companies (tenants) and assign users to them. Each company&apos;s agents are
           isolated from every other company by row-level security.
