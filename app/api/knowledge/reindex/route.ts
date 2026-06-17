@@ -60,7 +60,7 @@ export async function POST() {
   }
   if (!embeddings) {
     return NextResponse.json(
-      { error: "No OpenAI key available for embeddings. Add an OpenAI key in Settings → AI Provider Keys, or set a platform OPENAI_API_KEY." },
+      { error: "No embedding-capable key available. Add a Gemini or OpenAI key in Settings → AI Provider Keys (Claude/Anthropic can't embed), or set a platform key." },
       { status: 400 }
     );
   }
