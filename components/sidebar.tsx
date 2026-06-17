@@ -68,7 +68,7 @@ export function Sidebar({
           <img src="/the-hub-logo.png" alt="The Hub" className="h-9 w-9 shrink-0 rounded-xl object-contain" />
           <div className="leading-tight flex-1 min-w-0">
             <div className="display text-[20px] font-bold leading-none">The Hub</div>
-            <div className="mt-1 text-[10px] uppercase tracking-[0.14em] text-ink-soft/70">
+            <div className="mt-1 whitespace-nowrap text-[8px] uppercase tracking-[0.06em] text-ink-soft/70">
               Apps · Agents · Governance
             </div>
           </div>
