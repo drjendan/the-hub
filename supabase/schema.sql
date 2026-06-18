@@ -506,7 +506,13 @@ create policy p_events_rw on public.analytics_events
 -- =====================================================================
 -- Convenience view: agent catalog with owner name (for the Hub)
 -- =====================================================================
-create or replace view public.v_agent_catalog as
+-- DROP first, then create: this view uses `a.*`, so when a later migration adds
+-- a column to agents (e.g. agent_access.sql adds `visibility`), the column order
+-- shifts and `create or replace view` fails with 42P16 ("cannot change name of
+-- view column ..."). Dropping sidesteps that on re-run. CASCADE is safe — nothing
+-- depends on this convenience view.
+drop view if exists public.v_agent_catalog cascade;
+create view public.v_agent_catalog as
   select a.*, p.full_name as owner_name
   from public.agents a
   left join public.profiles p on p.id = a.owner_id;
