@@ -54,9 +54,9 @@ export function PlatformClient({ groups, unassigned }: { groups: AccountGroup[];
         <div className="card p-5">
           <h2 className="display text-[16px] font-semibold mb-1">Unassigned workspaces</h2>
           <p className="mb-3 text-[12px] text-ink-soft">
-            Legacy workspaces with no parent account. Recreate them under an account, or leave them as-is.
+            Legacy workspaces with no parent account. Recreate them under an account, delete them, or leave them as-is.
           </p>
-          <WorkspaceTable rows={unassigned} />
+          <WorkspaceTable rows={unassigned} onChanged={refresh} />
         </div>
       )}
     </div>
@@ -142,6 +142,24 @@ function AccountCard({ group, onChanged }: { group: AccountGroup; onChanged: () 
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  async function deleteAccount() {
+    if (confirmText !== group.name) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/platform/accounts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: group.id }),
+      });
+      if (res.ok) onChanged();
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function addWorkspace(e: React.FormEvent) {
     e.preventDefault();
@@ -176,13 +194,49 @@ function AccountCard({ group, onChanged }: { group: AccountGroup; onChanged: () 
             created {fmtDate(group.created_at)}
           </div>
         </div>
+        {!confirmingDelete && (
+          <button
+            onClick={() => { setConfirmingDelete(true); setConfirmText(""); }}
+            className="shrink-0 text-[12px] text-rust hover:underline"
+          >
+            Delete account
+          </button>
+        )}
       </div>
+
+      {confirmingDelete && (
+        <div className="mt-4 rounded-lg border border-rust/30 bg-rust/[0.04] p-3">
+          <p className="text-[12px] text-ink">
+            This permanently deletes <strong>{group.name}</strong> and its{" "}
+            <strong>{group.workspaces.length}</strong> workspace{group.workspaces.length === 1 ? "" : "s"} with all their
+            data. Type the account name <span className="mono text-rust">{group.name}</span> to confirm.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder={group.name}
+              className="flex-1 min-w-[180px] rounded-lg border hairline bg-white px-3 py-2 text-[13px] outline-none focus:border-rust"
+            />
+            <button
+              onClick={deleteAccount}
+              disabled={deleting || confirmText !== group.name}
+              className="rounded-lg bg-rust px-3 py-2 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
+            >
+              {deleting ? "Deleting…" : "Delete account"}
+            </button>
+            <button onClick={() => setConfirmingDelete(false)} disabled={deleting} className="text-[13px] text-ink-soft hover:text-ink">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4">
         {group.workspaces.length === 0 ? (
           <p className="text-[13px] text-ink-soft">No workspaces — a pure holding account. Add one below.</p>
         ) : (
-          <WorkspaceTable rows={group.workspaces} />
+          <WorkspaceTable rows={group.workspaces} onChanged={onChanged} />
         )}
       </div>
 
@@ -199,7 +253,7 @@ function AccountCard({ group, onChanged }: { group: AccountGroup; onChanged: () 
   );
 }
 
-function WorkspaceTable({ rows }: { rows: TenantRow[] }) {
+function WorkspaceTable({ rows, onChanged }: { rows: TenantRow[]; onChanged: () => void }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[13px]">
@@ -216,32 +270,67 @@ function WorkspaceTable({ rows }: { rows: TenantRow[] }) {
         </thead>
         <tbody>
           {rows.map((t) => (
-            <tr key={t.id} className="border-b hairline last:border-0 hover:bg-black/[0.02] transition-colors">
-              <td className="px-2 py-2.5">
-                <div className="font-medium text-ink">{t.name}</div>
-                <div className="text-[12px] text-ink-soft">
-                  {[t.industry, t.size_band].filter(Boolean).join(" · ") || "—"}
-                  <span className="mono"> · {t.slug}</span>
-                </div>
-              </td>
-              <td className="px-3 py-2.5 text-right tabular-nums">{t.users}</td>
-              <td className="px-3 py-2.5 text-right tabular-nums">{t.apps}</td>
-              <td className="px-3 py-2.5 text-right tabular-nums">{t.agents}</td>
-              <td className="px-3 py-2.5">
-                {t.byok ? (
-                  <span className="rounded-full bg-moss/12 px-2 py-0.5 text-[11px] font-semibold text-moss">✓ Key set</span>
-                ) : (
-                  <span className="rounded-full bg-black/[0.05] px-2 py-0.5 text-[11px] text-ink-soft">Platform key</span>
-                )}
-              </td>
-              <td className="px-3 py-2.5 text-ink-soft whitespace-nowrap">{fmtDate(t.created_at)}</td>
-              <td className="px-2 py-2.5 text-right">
-                <Link href={`/platform/${t.id}`} className="text-[12px] text-accent hover:underline whitespace-nowrap">View →</Link>
-              </td>
-            </tr>
+            <WorkspaceRow key={t.id} t={t} onChanged={onChanged} />
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function WorkspaceRow({ t, onChanged }: { t: TenantRow; onChanged: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function remove() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/platform/orgs", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: t.id }),
+      });
+      if (res.ok) onChanged();
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  }
+
+  return (
+    <tr className="border-b hairline last:border-0 hover:bg-black/[0.02] transition-colors">
+      <td className="px-2 py-2.5">
+        <div className="font-medium text-ink">{t.name}</div>
+        <div className="text-[12px] text-ink-soft">
+          {[t.industry, t.size_band].filter(Boolean).join(" · ") || "—"}
+          <span className="mono"> · {t.slug}</span>
+        </div>
+      </td>
+      <td className="px-3 py-2.5 text-right tabular-nums">{t.users}</td>
+      <td className="px-3 py-2.5 text-right tabular-nums">{t.apps}</td>
+      <td className="px-3 py-2.5 text-right tabular-nums">{t.agents}</td>
+      <td className="px-3 py-2.5">
+        {t.byok ? (
+          <span className="rounded-full bg-moss/12 px-2 py-0.5 text-[11px] font-semibold text-moss">✓ Key set</span>
+        ) : (
+          <span className="rounded-full bg-black/[0.05] px-2 py-0.5 text-[11px] text-ink-soft">Platform key</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 text-ink-soft whitespace-nowrap">{fmtDate(t.created_at)}</td>
+      <td className="px-2 py-2.5 text-right whitespace-nowrap">
+        {confirming ? (
+          <span className="inline-flex items-center gap-2 text-[12px]">
+            <span className="text-ink-soft">Delete &amp; all data?</span>
+            <button onClick={remove} disabled={busy} className="font-medium text-rust hover:underline disabled:opacity-40">Yes</button>
+            <button onClick={() => setConfirming(false)} disabled={busy} className="text-ink-soft hover:text-ink">No</button>
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-3">
+            <Link href={`/platform/${t.id}`} className="text-[12px] text-accent hover:underline">View →</Link>
+            <button onClick={() => setConfirming(true)} className="text-[12px] text-rust hover:underline">Delete</button>
+          </span>
+        )}
+      </td>
+    </tr>
   );
 }

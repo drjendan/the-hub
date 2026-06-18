@@ -111,3 +111,28 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ account, workspace, owner_status: ownerStatus });
 }
+
+/**
+ * DELETE /api/platform/accounts  Body: { id }
+ * Permanently deletes an account AND every workspace under it (organizations
+ * cascade from accounts), and each workspace's data in turn. PLATFORM-SUPER-ADMIN
+ * ONLY. Irreversible.
+ */
+export async function DELETE(req: Request) {
+  const su = await currentSuperAdmin();
+  if (!su) return NextResponse.json({ error: "Platform super-admin access required" }, { status: 403 });
+
+  let body: { id?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const id = (body.id || "").trim();
+  if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+  const db = createAdminClient();
+  const { error } = await db.from("accounts").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
