@@ -3,7 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
 import { Footer } from "@/components/footer";
-import { getUser, ensureProfile, getOrgsForUser, getCurrentOrgId } from "@/lib/auth";
+import { getUser, ensureProfile, getOrgsForUser, getCurrentOrgId, isPlatformSuperAdmin } from "@/lib/auth";
 
 // Inter is the single typeface across the app (matches the design reference).
 // cv11/ss01 feature settings + antialiasing are applied globally in globals.css.
@@ -36,6 +36,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           orgs={orgs}
           currentOrgId={currentOrgId}
           isAdmin={profile.app_role === "admin"}
+          isSuperAdmin={isPlatformSuperAdmin(user.email)}
         />
       );
     }

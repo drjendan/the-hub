@@ -33,6 +33,27 @@ export function isAdminEmail(email: string | null | undefined): boolean {
   return list.includes(email.toLowerCase());
 }
 
+/**
+ * Is this email a PLATFORM SUPER-ADMIN — the platform owner who can see and
+ * manage every tenant across the whole system?
+ *
+ * This is a DELIBERATELY SEPARATE designation from app_role='admin' (the
+ * per-provider company admin) and from org_role='owner' (a single tenant's
+ * admin). Neither of those grants platform-wide access. Super-admin is granted
+ * ONLY by listing the email in the PLATFORM_SUPERADMIN_EMAILS environment
+ * variable — it lives in the deployment env, never in the database, so no
+ * in-app write path (profile update, self-escalation bug, rogue company admin)
+ * can ever mint one. Changing the set requires host-level env access.
+ */
+export function isPlatformSuperAdmin(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const list = (process.env.PLATFORM_SUPERADMIN_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return list.includes(email.toLowerCase());
+}
+
 /** The signed-in auth user, or null. */
 export async function getUser(): Promise<User | null> {
   const supabase = createClient();
@@ -234,4 +255,28 @@ export async function currentOrgAdmin(): Promise<{ user: User; orgId: string } |
   const isAdmin = profile.app_role === "admin";
   const isOwner = orgs.some((o) => o.id === orgId && o.org_role === "owner");
   return isAdmin || isOwner ? { user, orgId } : null;
+}
+
+/**
+ * Non-redirecting platform super-admin check for API route handlers. Returns
+ * the super-admin's user, or null if the caller is not a signed-in super-admin.
+ *
+ * This is the ONLY gate protecting cross-tenant data: callers MUST invoke this
+ * (and bail on null) BEFORE constructing the RLS-bypassing service-role client.
+ */
+export async function currentSuperAdmin(): Promise<{ user: User } | null> {
+  const user = await getUser();
+  if (!user) return null;
+  return isPlatformSuperAdmin(user.email) ? { user } : null;
+}
+
+/**
+ * Require a platform super-admin — redirects everyone else to the dashboard
+ * (no hint the platform portal exists). Use this in the /platform layout so the
+ * entire cross-tenant section is gated in one place. Returns the user.
+ */
+export async function requireSuperAdmin(): Promise<{ user: User }> {
+  const user = await requireUser();
+  if (!isPlatformSuperAdmin(user.email)) redirect("/");
+  return { user };
 }

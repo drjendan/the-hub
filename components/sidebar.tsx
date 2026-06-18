@@ -32,12 +32,14 @@ export function Sidebar({
   orgs,
   currentOrgId,
   isAdmin,
+  isSuperAdmin,
 }: {
   user: { email: string; fullName: string | null };
   role: AppRole;
   orgs: OrgRef[];
   currentOrgId: string | null;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
 }) {
   const path = usePathname();
   const router = useRouter();
@@ -152,6 +154,27 @@ export function Sidebar({
           >
             Companies &amp; Users
           </Link>
+        )}
+
+        {/* Platform-owner portal — super-admins ONLY (env allowlist, not a
+            company role). Separated and visually marked as cross-tenant. */}
+        {isSuperAdmin && (
+          <>
+            <div className="px-3 pt-5 pb-1 text-[10px] uppercase tracking-[0.14em] text-terracotta-deep/80">
+              Platform owner
+            </div>
+            <Link
+              href="/platform"
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] transition-colors ${
+                active("/platform") ? "bg-ink text-paper" : "text-ink-soft hover:bg-black/[0.04] hover:text-ink"
+              }`}
+            >
+              <span className={`w-4 text-center ${active("/platform") ? "text-accent-soft" : "text-terracotta"}`}>
+                ⬢
+              </span>
+              All tenants
+            </Link>
+          </>
         )}
       </nav>
 
