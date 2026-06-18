@@ -18,10 +18,17 @@ export default async function TenantDetailPage({ params }: { params: { id: strin
 
   const { data: org } = await db
     .from("organizations")
-    .select("id, name, slug, industry, size_band, governance_mode, created_at")
+    .select("id, name, slug, industry, size_band, governance_mode, created_at, account_id")
     .eq("id", params.id)
     .maybeSingle();
   if (!org) notFound();
+
+  const accountId = (org.account_id as string | null) ?? null;
+  let accountName: string | null = null;
+  if (accountId) {
+    const { data: acct } = await db.from("accounts").select("name").eq("id", accountId).maybeSingle();
+    accountName = (acct?.name as string | null) ?? null;
+  }
 
   const { data: members } = await db
     .from("org_members")
@@ -58,8 +65,13 @@ export default async function TenantDetailPage({ params }: { params: { id: strin
   return (
     <>
       <div className="border-b hairline pb-6">
-        <Link href="/platform" className="text-[12px] text-accent hover:underline">← All tenants</Link>
-        <h1 className="display text-[30px] font-semibold leading-none mt-2">{org.name}</h1>
+        <Link href="/platform" className="text-[12px] text-accent hover:underline">← All accounts</Link>
+        {accountName && (
+          <div className="mt-2 text-[12px] text-ink-soft">
+            Account: <span className="text-ink font-medium">{accountName}</span>
+          </div>
+        )}
+        <h1 className="display text-[30px] font-semibold leading-none mt-1">{org.name}</h1>
         <div className="mt-2 text-[13px] text-ink-soft">
           {[org.industry, org.size_band].filter(Boolean).join(" · ") || "—"}
           <span className="mono"> · {org.slug}</span>

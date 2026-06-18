@@ -10,6 +10,7 @@ export interface Entry {
   category: string | null;
   active?: boolean;
   created_at: string;
+  is_account?: boolean;   // applied from the parent account — read-only here
 }
 
 export interface Pack {
@@ -350,11 +351,16 @@ function EntryRow({
                 {entry.active === false ? "Inactive" : "Active"}
               </span>
             )}
+            {entry.is_account && (
+              <span className="rounded-full bg-accent/[0.08] px-2 py-0.5 text-[11px] font-medium text-accent-deep">
+                From account
+              </span>
+            )}
           </div>
           {entry.body && <p className="mt-1.5 text-[13px] text-ink-soft leading-relaxed whitespace-pre-wrap">{entry.body}</p>}
         </div>
       </div>
-      {canManage && (
+      {canManage && !entry.is_account && (
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t hairline pt-3 text-[12px]">
           <button onClick={() => setEditing(true)} className="text-accent hover:underline">Edit</button>
           {showActive && (

@@ -23,6 +23,12 @@ export interface OrgRef {
   logo_url: string | null;
 }
 
+export interface AccountRef {
+  id: string;
+  name: string;
+  account_role: string;
+}
+
 /** Emails listed in ADMIN_EMAILS are auto-promoted to the global admin role. */
 export function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
@@ -279,4 +285,79 @@ export async function requireSuperAdmin(): Promise<{ user: User }> {
   const user = await requireUser();
   if (!isPlatformSuperAdmin(user.email)) redirect("/");
   return { user };
+}
+
+/**
+ * Accounts the signed-in user administers (the rollup principal). Read via the
+ * service role so the check never depends on the very RLS it gates — and so it
+ * works before any workspace/membership context is resolved.
+ */
+export async function getAccountsForAdmin(userId: string): Promise<AccountRef[]> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("account_members")
+    .select("account_role, account:accounts(id, name)")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+  const rows = (data as Record<string, unknown>[] | null) || [];
+  return rows
+    .map((row) => {
+      const acct = row.account as { id: string; name: string } | null;
+      return acct ? { id: acct.id, name: acct.name, account_role: row.account_role as string } : null;
+    })
+    .filter((a): a is AccountRef => a !== null);
+}
+
+/** True if the user administers this specific account. */
+export async function isAccountAdmin(userId: string, accountId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("account_members")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("account_id", accountId)
+    .maybeSingle();
+  return !!data;
+}
+
+/**
+ * True if the user administers the account that owns this workspace. The pinning
+ * predicate for portfolio endpoints: an account admin may act on a workspace ONLY
+ * when that workspace's account_id is one they administer (never another account).
+ */
+export async function adminAccountForWorkspace(
+  userId: string,
+  workspaceId: string
+): Promise<string | null> {
+  const admin = createAdminClient();
+  const { data: org } = await admin
+    .from("organizations")
+    .select("account_id")
+    .eq("id", workspaceId)
+    .maybeSingle();
+  const accountId = (org?.account_id as string | null) ?? null;
+  if (!accountId) return null;
+  return (await isAccountAdmin(userId, accountId)) ? accountId : null;
+}
+
+/**
+ * Non-redirecting account-admin check for API routes. Returns the user plus the
+ * accounts they administer, or null if they administer none.
+ */
+export async function currentAccountAdmin(): Promise<{ user: User; accounts: AccountRef[] } | null> {
+  const user = await getUser();
+  if (!user) return null;
+  const accounts = await getAccountsForAdmin(user.id);
+  return accounts.length > 0 ? { user, accounts } : null;
+}
+
+/**
+ * Require an account admin — redirects users who administer no account to the
+ * dashboard. Gates the entire /portfolio section in its layout.
+ */
+export async function requireAccountAdmin(): Promise<{ user: User; accounts: AccountRef[] }> {
+  const user = await requireUser();
+  const accounts = await getAccountsForAdmin(user.id);
+  if (accounts.length === 0) redirect("/");
+  return { user, accounts };
 }

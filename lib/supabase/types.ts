@@ -2,6 +2,7 @@
 
 export type AppRole = "admin" | "builder" | "reviewer" | "member";
 export type OrgRole = "owner" | "manager" | "staff";
+export type AccountRole = "owner" | "admin";
 export type AgentStatus = "draft" | "in_review" | "published" | "deprecated" | "blocked";
 export type RiskTier = "low" | "moderate" | "high" | "restricted";
 export type RequestKind = "publish" | "version" | "access" | "decommission" | "policy_exception";
@@ -32,9 +33,12 @@ export interface Agent {
 }
 
 // Governance knowledge base; see supabase/governance_kb.sql.
+// A policy is EITHER workspace-local (organization_id set) OR account-level
+// (account_id set, applied to workspaces via policy_workspaces) — never both.
 export interface Policy {
   id: string;
-  organization_id: string;
+  organization_id: string | null;
+  account_id: string | null;
   title: string;
   body: string | null;
   category: string | null;
@@ -70,8 +74,26 @@ export interface AgentAccess {
   created_at: string;
 }
 
+// An "account" is the customer/billing entity above workspaces — a holding
+// company (many workspaces) or a single company (one workspace, or none yet).
+export interface Account {
+  id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+}
+
+export interface AccountMember {
+  id: string;
+  account_id: string;
+  user_id: string;
+  account_role: AccountRole;
+  created_at: string;
+}
+
 export interface Organization {
   id: string;
+  account_id: string | null;   // parent account (null only for legacy/un-parented rows)
   name: string;
   slug: string;
   industry: string | null;
@@ -80,6 +102,18 @@ export interface Organization {
   logo_url: string | null;
   mission_headline: string | null;
   mission_statement: string | null;
+  created_at: string;
+}
+
+// "organizations" is physically the workspace table; Workspace is its domain name.
+export type Workspace = Organization;
+
+// Maps an account-level policy to the workspaces it applies to (assignable
+// governance). Workspace-local policies do not use this table.
+export interface PolicyWorkspace {
+  id: string;
+  policy_id: string;
+  organization_id: string;
   created_at: string;
 }
 

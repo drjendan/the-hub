@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { currentSuperAdmin } from "@/lib/auth";
+import { currentAccountAdmin, isAccountAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -16,15 +16,15 @@ function slugify(name: string): string {
 }
 
 /**
- * POST /api/platform/orgs  Body: { account_id, name, industry?, size_band? }
- *
- * Creates a WORKSPACE under an existing account. PLATFORM-SUPER-ADMIN ONLY.
- * (Account creation lives in /api/platform/accounts.) The super-admin is not
- * added as a member — the portal sees everything via the service role.
+ * POST /api/portfolio/workspaces  Body: { account_id, name, industry?, size_band? }
+ * Creates a workspace under an account the caller administers. Gated by
+ * currentAccountAdmin() + an explicit isAccountAdmin(account_id) check before the
+ * service client touches anything, so an account admin can only add workspaces to
+ * THEIR OWN account.
  */
 export async function POST(req: Request) {
-  const su = await currentSuperAdmin();
-  if (!su) return NextResponse.json({ error: "Platform super-admin access required" }, { status: 403 });
+  const admin = await currentAccountAdmin();
+  if (!admin) return NextResponse.json({ error: "Account admin access required" }, { status: 403 });
 
   let body: { account_id?: string; name?: string; industry?: string; size_band?: string };
   try {
@@ -37,14 +37,13 @@ export async function POST(req: Request) {
   const name = (body.name || "").trim();
   if (!accountId) return NextResponse.json({ error: "account_id is required" }, { status: 400 });
   if (!name) return NextResponse.json({ error: "Workspace name is required" }, { status: 400 });
+  if (!(await isAccountAdmin(admin.user.id, accountId))) {
+    return NextResponse.json({ error: "You do not administer this account" }, { status: 403 });
+  }
 
   const db = createAdminClient();
-
-  // Make sure the account exists (FK would catch it too, but a clear error is nicer).
-  const { data: account } = await db.from("accounts").select("id").eq("id", accountId).maybeSingle();
-  if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
-
   const base = slugify(name);
+
   for (let attempt = 0; attempt < 5; attempt++) {
     const slug = attempt === 0 ? base : `${base}-${attempt + 1}`;
     const { data, error } = await db
