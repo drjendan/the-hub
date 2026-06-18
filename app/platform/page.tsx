@@ -1,6 +1,6 @@
 import { requireSuperAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PlatformClient, type AccountGroup, type TenantRow } from "./platform-client";
+import { PlatformClient, type AccountGroup, type TenantRow, type AccountAdmin } from "./platform-client";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,12 @@ export default async function PlatformPage() {
   const apps = appsResp.error ? [] : appsResp.data ?? [];
   const keysResp = (await db.from("org_provider_keys").select("organization_id")) as { data: { organization_id: string }[] | null; error: unknown };
   const keys = keysResp.error ? [] : keysResp.data ?? [];
-  const amResp = (await db.from("account_members").select("account_id")) as { data: { account_id: string }[] | null; error: unknown };
+  const amResp = (await db
+    .from("account_members")
+    .select("account_id, account_role, user:profiles(id, email, full_name)")) as {
+    data: Record<string, unknown>[] | null;
+    error: unknown;
+  };
   const accountMembers = amResp.error ? [] : amResp.data ?? [];
 
   const tally = (rows: { organization_id: string }[] | null | undefined) => {
@@ -36,8 +41,15 @@ export default async function PlatformPage() {
   const agentCounts = tally(agents);
   const appCounts = tally(apps);
   const byokOrgs = new Set((keys || []).map((k) => k.organization_id));
-  const adminCounts = new Map<string, number>();
-  for (const a of accountMembers) adminCounts.set(a.account_id, (adminCounts.get(a.account_id) || 0) + 1);
+  const adminsByAccount = new Map<string, AccountAdmin[]>();
+  for (const a of accountMembers) {
+    const u = a.user as unknown as { id: string; email: string | null; full_name: string | null } | null;
+    if (!u) continue;
+    const accountId = a.account_id as string;
+    const list = adminsByAccount.get(accountId) || [];
+    list.push({ user_id: u.id, email: u.email, full_name: u.full_name, account_role: a.account_role as string });
+    adminsByAccount.set(accountId, list);
+  }
 
   const toRow = (o: Record<string, unknown>): TenantRow => ({
     id: o.id as string,
@@ -72,7 +84,7 @@ export default async function PlatformPage() {
     name: a.name as string,
     slug: a.slug as string,
     created_at: a.created_at as string,
-    admins: adminCounts.get(a.id as string) || 0,
+    admins: adminsByAccount.get(a.id as string) || [],
     workspaces: byAccount.get(a.id as string) || [],
   }));
 

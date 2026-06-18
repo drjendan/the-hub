@@ -17,12 +17,18 @@ export interface TenantRow {
   agents: number;
   byok: boolean;
 }
+export interface AccountAdmin {
+  user_id: string;
+  email: string | null;
+  full_name: string | null;
+  account_role: string;
+}
 export interface AccountGroup {
   id: string;
   name: string;
   slug: string;
   created_at: string;
-  admins: number;
+  admins: AccountAdmin[];
   workspaces: TenantRow[];
 }
 
@@ -190,8 +196,8 @@ function AccountCard({ group, onChanged }: { group: AccountGroup; onChanged: () 
           <h2 className="display text-[18px] font-semibold leading-tight">{group.name}</h2>
           <div className="mt-1 text-[12px] text-ink-soft">
             <span className="mono">{group.slug}</span> · {group.workspaces.length} workspace
-            {group.workspaces.length === 1 ? "" : "s"} · {group.admins} account admin{group.admins === 1 ? "" : "s"} ·
-            created {fmtDate(group.created_at)}
+            {group.workspaces.length === 1 ? "" : "s"} · {group.admins.length} account admin
+            {group.admins.length === 1 ? "" : "s"} · created {fmtDate(group.created_at)}
           </div>
         </div>
         {!confirmingDelete && (
@@ -232,6 +238,8 @@ function AccountCard({ group, onChanged }: { group: AccountGroup; onChanged: () 
         </div>
       )}
 
+      <AccountAdmins group={group} onChanged={onChanged} />
+
       <div className="mt-4">
         {group.workspaces.length === 0 ? (
           <p className="text-[13px] text-ink-soft">No workspaces — a pure holding account. Add one below.</p>
@@ -248,6 +256,98 @@ function AccountCard({ group, onChanged }: { group: AccountGroup; onChanged: () 
           {busy ? "Adding…" : "Add workspace"}
         </button>
         {err && <p className="w-full text-[12px] text-rust">{err}</p>}
+      </form>
+    </div>
+  );
+}
+
+function AccountAdmins({ group, onChanged }: { group: AccountGroup; onChanged: () => void }) {
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("admin");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/platform/account-members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ account_id: group.id, email, account_role: role }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg({ tone: "err", text: data.error || "Could not add admin." });
+        return;
+      }
+      setEmail("");
+      setMsg({
+        tone: "ok",
+        text: data.already ? "Already an admin." : data.status === "invited" ? "Invited and added." : "Added.",
+      });
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(userId: string) {
+    await fetch("/api/platform/account-members", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ account_id: group.id, user_id: userId }),
+    });
+    onChanged();
+  }
+
+  return (
+    <div className="mt-4">
+      <div className="text-[11px] uppercase tracking-wide text-ink-soft/80 mb-2">Account admins</div>
+      {group.admins.length === 0 ? (
+        <p className="text-[13px] text-ink-soft">No account admins yet — add one below to give portfolio access.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {group.admins.map((a) => (
+            <div key={a.user_id} className="flex items-center justify-between gap-3 rounded-lg border hairline px-3 py-2">
+              <div className="min-w-0">
+                <div className="text-[13px] font-medium truncate">{a.full_name || a.email}</div>
+                <div className="text-[12px] text-ink-soft truncate">{a.email}</div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-[11px] uppercase tracking-wide text-ink-soft">{a.account_role}</span>
+                <button onClick={() => remove(a.user_id)} className="text-[12px] text-rust hover:underline">Remove</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form onSubmit={add} className="mt-2 flex flex-wrap items-center gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="admin@company.com"
+          className="flex-1 min-w-[200px] rounded-lg border hairline bg-white px-3 py-2 text-[13px] outline-none focus:border-accent"
+        />
+        <select
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          className="rounded-lg border hairline bg-white px-3 py-2 text-[13px] outline-none focus:border-accent"
+        >
+          <option value="admin">admin</option>
+          <option value="owner">owner</option>
+        </select>
+        <button
+          type="submit"
+          disabled={busy || !email.trim()}
+          className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white hover:bg-accent-deep disabled:opacity-40 transition-colors"
+        >
+          {busy ? "Adding…" : "Add admin"}
+        </button>
+        {msg && <p className={`w-full text-[12px] ${msg.tone === "ok" ? "text-moss" : "text-rust"}`}>{msg.text}</p>}
       </form>
     </div>
   );
