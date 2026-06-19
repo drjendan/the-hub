@@ -64,8 +64,13 @@ npm install
 ### 2. Create the Supabase project + schema
 
 1. Create a project at <https://supabase.com>.
-2. Open **SQL Editor** → paste and run **`supabase/schema.sql`**.
+2. Open **SQL Editor** → paste and run **`supabase/migrate.sql`** — the one-shot
+   rebuild script. It concatenates all 16 migrations in dependency order behind
+   `STEP NN / 16` banners, so a fresh project is built in a single pass. (The
+   individual files are still there if you prefer to run them one at a time, in
+   the order listed at the top of `migrate.sql`.)
    - **Do NOT run `supabase/seed.sql`** — that is demo data, and you want to start empty.
+   - `supabase/accounts_rollback.sql` is a teardown script — never run it on a fresh build.
 3. **Auth → Providers → Email:** for the smoothest start, turn **"Confirm email" OFF** (so
    sign-up logs you straight in). Leave it on if you want email verification — users must then
    click the confirmation link before signing in, and inviting users requires email sending to
@@ -173,6 +178,8 @@ agent-hub/
 │  ├─ ai.ts                     # provider-agnostic AI layer
 │  └─ supabase/                 # client, server, admin (service role), types
 └─ supabase/
-   ├─ schema.sql                # run this
+   ├─ migrate.sql               # run this — all 16 migrations combined, in order
+   ├─ schema.sql                # migration 1 of 16 (foundation); rest are additive
+   ├─ accounts_rollback.sql     # teardown — never run on a fresh build
    └─ seed.sql                  # demo data — do NOT run for a real app
 ```
