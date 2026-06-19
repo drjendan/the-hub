@@ -173,6 +173,9 @@ alter table public.organizations drop column if exists account_id;
 drop table if exists public.account_members;
 drop table if exists public.accounts;
 
+drop function if exists public.policy_assigned_to_member(uuid);
+drop function if exists public.account_of_workspace(uuid);
+drop function if exists public.account_of_policy(uuid);
 drop function if exists public.is_account_admin_of_workspace(uuid);
 drop function if exists public.is_account_owner(uuid);
 drop function if exists public.is_account_admin(uuid);

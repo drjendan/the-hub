@@ -152,6 +152,28 @@ returns boolean language sql stable security definer set search_path = public as
   select public.is_workspace_member(org) or public.is_account_admin_of_workspace(org);
 $$;
 
+-- Cross-table lookups for the policies / policy_workspaces RLS. These MUST be
+-- SECURITY DEFINER (bypass RLS) so the two tables' policies can reference each
+-- other through a function call without triggering mutual RLS recursion.
+create or replace function public.account_of_policy(p_id uuid)
+returns uuid language sql stable security definer set search_path = public as $$
+  select account_id from public.policies where id = p_id;
+$$;
+
+create or replace function public.account_of_workspace(org uuid)
+returns uuid language sql stable security definer set search_path = public as $$
+  select account_id from public.organizations where id = org;
+$$;
+
+-- Is the current user a member of any workspace this account policy is mapped to?
+create or replace function public.policy_assigned_to_member(p_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.policy_workspaces pw
+    where pw.policy_id = p_id and public.is_workspace_member(pw.organization_id)
+  );
+$$;
+
 -- =====================================================================
 -- RLS — new tables
 -- =====================================================================
@@ -190,37 +212,25 @@ create policy p_account_members_write on public.account_members
 -- the policy's account. Writable ONLY by an admin of the policy's account AND
 -- ONLY when the target workspace belongs to that SAME account — the cross-account
 -- governance guard (you can never map a policy onto another account's workspace).
+-- Reference policies only through SECURITY DEFINER helpers (account_of_policy /
+-- account_of_workspace) — never a direct subquery into policies — so there is no
+-- mutual RLS recursion with p_policies_read.
 drop policy if exists p_pw_read on public.policy_workspaces;
 create policy p_pw_read on public.policy_workspaces
   for select using (
     public.is_workspace_member(organization_id)
-    or exists (
-      select 1 from public.policies p
-      where p.id = policy_workspaces.policy_id
-        and p.account_id is not null
-        and public.is_account_admin(p.account_id)
-    )
+    or public.is_account_admin(public.account_of_policy(policy_id))
   );
 drop policy if exists p_pw_write on public.policy_workspaces;
 create policy p_pw_write on public.policy_workspaces
   for all using (
-    exists (
-      select 1 from public.policies p
-      join public.organizations o on o.id = policy_workspaces.organization_id
-      where p.id = policy_workspaces.policy_id
-        and p.account_id is not null
-        and public.is_account_admin(p.account_id)
-        and o.account_id = p.account_id
-    )
+    public.account_of_policy(policy_id) is not null
+    and public.is_account_admin(public.account_of_policy(policy_id))
+    and public.account_of_workspace(organization_id) = public.account_of_policy(policy_id)
   ) with check (
-    exists (
-      select 1 from public.policies p
-      join public.organizations o on o.id = policy_workspaces.organization_id
-      where p.id = policy_workspaces.policy_id
-        and p.account_id is not null
-        and public.is_account_admin(p.account_id)
-        and o.account_id = p.account_id
-    )
+    public.account_of_policy(policy_id) is not null
+    and public.is_account_admin(public.account_of_policy(policy_id))
+    and public.account_of_workspace(organization_id) = public.account_of_policy(policy_id)
   );
 
 -- =====================================================================
@@ -389,6 +399,9 @@ create policy p_agent_access_write on public.agent_access
 -- READ: a workspace member reads local policies of their workspace AND account
 -- policies MAPPED to their workspace; an account admin reads all their account's
 -- policies. Account policies mapped to OTHER workspaces stay hidden.
+-- Reference policy_workspaces only through the SECURITY DEFINER helper
+-- policy_assigned_to_member — never a direct subquery — to avoid mutual RLS
+-- recursion with p_pw_read.
 drop policy if exists p_policies_read on public.policies;
 create policy p_policies_read on public.policies
   for select using (
@@ -396,10 +409,7 @@ create policy p_policies_read on public.policies
     or (
       account_id is not null and (
         public.is_account_admin(account_id)
-        or exists (
-          select 1 from public.policy_workspaces pw
-          where pw.policy_id = policies.id and public.is_workspace_member(pw.organization_id)
-        )
+        or public.policy_assigned_to_member(id)
       )
     )
   );
