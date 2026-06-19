@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, ensureProfile, getOrgsForUser } from "@/lib/auth";
+import { getUser, ensureProfile, getOrgsForUser, getCurrentOrgId } from "@/lib/auth";
 import { googleOAuthConfigured } from "@/lib/google";
 import { StatusBadge, RiskTag } from "@/components/ui";
 import { connectorLabel } from "@/lib/connectors";
@@ -34,12 +34,21 @@ function fmtDate(iso: string | null): string {
 export default async function AgentProfile({ params }: { params: { id: string } }) {
   const supabase = createClient();
 
+  // Resolve the active workspace and scope the lookup to it. An account admin can
+  // read agents across their whole account via RLS, but the detail page should only
+  // open an agent that lives in the workspace currently selected in the switcher
+  // (slugs are unique per workspace, so this also disambiguates collisions).
+  const user = await getUser();
+  const profile = user ? await ensureProfile(user) : null;
+  const orgs = user ? await getOrgsForUser(user.id) : [];
+  const orgId = profile ? await getCurrentOrgId(orgs, profile) : null;
+  if (!orgId) notFound();
+
   const { data: agent } = await supabase
     .from("agents")
     .select("*, owner:profiles(full_name, email), org:organizations(name)")
     .eq("slug", params.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
+    .eq("organization_id", orgId)
     .maybeSingle();
 
   if (!agent) notFound();
@@ -59,7 +68,6 @@ export default async function AgentProfile({ params }: { params: { id: string } 
   const versions = versionRows || [];
 
   // The viewer's own Gmail connection (RLS scopes it to them), for the test-run panel.
-  const user = await getUser();
   const { data: conn } = user
     ? await supabase.from("connections").select("id, account_email").eq("provider", "google").maybeSingle()
     : { data: null };
@@ -72,14 +80,12 @@ export default async function AgentProfile({ params }: { params: { id: string } 
 
   // Delete permission (also enforced server-side in /api/agents DELETE):
   // an admin/builder of the company, or the agent's owner.
-  const profile = user ? await ensureProfile(user) : null;
   const canManage = profile?.app_role === "admin" || profile?.app_role === "builder";
   const canDelete = canManage || (!!user && agent.owner_id === user.id);
   const canReview = profile?.app_role === "admin" || profile?.app_role === "reviewer";
 
   // Access management (owner / global admin / company owner). agent.visibility is
   // present once agent_access.sql is applied; absent → treat as 'everyone'.
-  const orgs = user ? await getOrgsForUser() : [];
   const isOrgOwner = orgs.some((o) => o.id === agent.organization_id && o.org_role === "owner");
   const canManageAccess =
     profile?.app_role === "admin" || isOrgOwner || (!!user && agent.owner_id === user.id);
