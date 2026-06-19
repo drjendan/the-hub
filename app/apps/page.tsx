@@ -23,9 +23,9 @@ export default async function AppsPage() {
   }
 
   const supabase = createClient();
-  const orgIds = orgs.map((o) => o.id);
-  // Apps are RLS-scoped to the user's orgs; company name + logo come from the
-  // already-resilient org list (so this query has no logo_url dependency).
+  // Scope to the ACTIVE workspace. RLS alone is not enough: an account admin can
+  // read every workspace in their account via rollup, so without this filter the
+  // catalog would merge all of them. The org switcher sets which workspace is active.
   const [{ data: appData }, { data: memberData }] = await Promise.all([
     supabase
       // select * so new profile columns don't break the catalog before
@@ -33,11 +33,12 @@ export default async function AppsPage() {
       // created_by) — disambiguate the embed to product_owner.
       .from("apps")
       .select("*, owner:profiles!product_owner(full_name, email)")
+      .eq("organization_id", orgId)
       .order("created_at", { ascending: false }),
     supabase
       .from("org_members")
       .select("organization_id, user:profiles(id, full_name, email)")
-      .in("organization_id", orgIds),
+      .eq("organization_id", orgId),
   ]);
 
   const orgMap = new Map(orgs.map((o) => [o.id, o]));

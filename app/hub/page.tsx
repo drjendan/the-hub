@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getUser, ensureProfile } from "@/lib/auth";
+import { getUser, ensureProfile, getOrgsForUser, getCurrentOrgId } from "@/lib/auth";
 import { HubClient, type AgentRow } from "./hub-client";
 
 export const dynamic = "force-dynamic";
@@ -8,14 +8,23 @@ export default async function HubPage() {
   const user = await getUser();
   const profile = user ? await ensureProfile(user) : null;
   const canManage = profile?.app_role === "admin" || profile?.app_role === "builder";
+
+  // Scope to the ACTIVE workspace. RLS isn't enough on its own — an account admin
+  // can read every workspace in their account, so without this filter the library
+  // would merge all of them. No active workspace → nothing to list.
+  const orgs = user ? await getOrgsForUser(user.id) : [];
+  const orgId = profile ? await getCurrentOrgId(orgs, profile) : null;
   const supabase = createClient();
 
-  const { data } = await supabase
-    .from("agents")
-    .select(
-      "id, slug, name, summary, category, status, risk, current_version, connectors, tags, created_at, owner_id, organization_id, owner:profiles(full_name, email), org:organizations(name)"
-    )
-    .order("created_at", { ascending: false });
+  const { data } = orgId
+    ? await supabase
+        .from("agents")
+        .select(
+          "id, slug, name, summary, category, status, risk, current_version, connectors, tags, created_at, owner_id, organization_id, owner:profiles(full_name, email), org:organizations(name)"
+        )
+        .eq("organization_id", orgId)
+        .order("created_at", { ascending: false })
+    : { data: [] };
 
   const agents: AgentRow[] = (data || []).map((a) => {
     const owner = a.owner as unknown as { full_name: string | null; email: string | null } | null;
