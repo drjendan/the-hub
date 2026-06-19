@@ -147,31 +147,74 @@ export async function ensureProfile(user: User): Promise<Profile> {
   return profile as Profile;
 }
 
-/** Organizations the signed-in user belongs to (RLS-scoped). */
-export async function getOrgsForUser(): Promise<OrgRef[]> {
-  const supabase = createClient();
-  // Try selecting logo_url; fall back if the logos migration hasn't been run yet,
-  // so the whole app (which loads this in the layout) keeps working regardless.
-  let res = (await supabase
+/**
+ * Workspaces the signed-in user can open in the main app — the union of:
+ *   1. direct workspace memberships (their own org_members rows), and
+ *   2. account-admin ROLLUP: every workspace under an account they administer.
+ *
+ * Uses the service role with explicit user_id / account scoping (rather than
+ * leaning on org_members RLS, which returns teammates' rows too). An account
+ * admin is treated as 'owner' of their account's workspaces, which overrides a
+ * lower direct role on the same workspace.
+ */
+export async function getOrgsForUser(userId?: string): Promise<OrgRef[]> {
+  const uid = userId ?? (await getUser())?.id;
+  if (!uid) return [];
+  const admin = createAdminClient();
+
+  // 1) Direct memberships (this user's own rows). logo_url may not exist yet
+  //    (logos.sql) — fall back without it so the layout never crashes.
+  let mem = (await admin
     .from("org_members")
     .select("org_role, organization:organizations(id, name, logo_url)")
-    .order("created_at", { ascending: true })) as { data: unknown; error: unknown };
-  if (res.error) {
-    res = (await supabase
+    .eq("user_id", uid)
+    .order("created_at", { ascending: true })) as { data: Record<string, unknown>[] | null; error: unknown };
+  if (mem.error) {
+    mem = (await admin
       .from("org_members")
       .select("org_role, organization:organizations(id, name)")
-      .order("created_at", { ascending: true })) as { data: unknown; error: unknown };
+      .eq("user_id", uid)
+      .order("created_at", { ascending: true })) as { data: Record<string, unknown>[] | null; error: unknown };
   }
 
-  const rows = (res.data as Record<string, unknown>[] | null) || [];
-  return rows
-    .map((row) => {
-      const org = row.organization as { id: string; name: string; logo_url?: string | null } | null;
-      return org
-        ? { id: org.id, name: org.name, org_role: row.org_role as string, logo_url: org.logo_url ?? null }
-        : null;
-    })
-    .filter((o): o is OrgRef => o !== null);
+  // 2) Account-admin rollup: workspaces under every account the user administers.
+  const { data: acctRows } = await admin
+    .from("account_members")
+    .select("account_id")
+    .eq("user_id", uid);
+  const accountIds = ((acctRows as { account_id: string }[] | null) || []).map((r) => r.account_id);
+
+  let rollup: Record<string, unknown>[] = [];
+  if (accountIds.length > 0) {
+    let r = (await admin
+      .from("organizations")
+      .select("id, name, logo_url, account_id")
+      .in("account_id", accountIds)
+      .order("created_at", { ascending: true })) as { data: Record<string, unknown>[] | null; error: unknown };
+    if (r.error) {
+      r = (await admin
+        .from("organizations")
+        .select("id, name, account_id")
+        .in("account_id", accountIds)
+        .order("created_at", { ascending: true })) as { data: Record<string, unknown>[] | null; error: unknown };
+    }
+    rollup = r.data || [];
+  }
+
+  const map = new Map<string, OrgRef>();
+  for (const row of mem.data || []) {
+    const org = row.organization as { id: string; name: string; logo_url?: string | null } | null;
+    if (org) map.set(org.id, { id: org.id, name: org.name, org_role: row.org_role as string, logo_url: org.logo_url ?? null });
+  }
+  for (const org of rollup) {
+    map.set(org.id as string, {
+      id: org.id as string,
+      name: org.name as string,
+      org_role: "owner",
+      logo_url: (org.logo_url as string | null) ?? null,
+    });
+  }
+  return [...map.values()];
 }
 
 /**

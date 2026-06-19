@@ -27,7 +27,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     const user = await getUser();
     if (user) {
       const profile = await ensureProfile(user);
-      const orgs = await getOrgsForUser();
+      const orgs = await getOrgsForUser(user.id);
       const currentOrgId = await getCurrentOrgId(orgs, profile);
       const accounts = await getAccountsForAdmin(user.id);
       shell = (
