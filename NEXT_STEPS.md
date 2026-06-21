@@ -1,6 +1,6 @@
 # Agent Hub — Next Steps / Roadmap
 
-_Last updated: 2026-06-16_
+_Last updated: 2026-06-21_
 
 This file reflects the **actual state of the code**, not just intentions. The
 core multi-tenant platform is built and working; the items under "Still ahead"
@@ -50,6 +50,32 @@ are the genuine backlog.
   behind one interface, with optional per-call key/model overrides (used by BYOK).
 - **JD intake + recommendations** — corporate/role intake and `/api/recommendations`
   exist; see "Still ahead" for the remaining build-this/gap-suggestion polish.
+
+---
+
+## Connectors (Gmail + others) — deferred
+
+**Decision:** connectors are a **phase-2 capability, deferred** until the core
+platform is proven with the first client. Build the connectors clients actually
+ask for once we know which ones those are.
+
+- **Architecture already exists** — the Gmail connector (read-only OAuth flow,
+  encrypted token storage, per-user `connections`, the "Run on my inbox" path) is
+  built in code but is **NOT configured or enabled** in any live environment.
+- **Enabling Gmail requires** (all external setup, no code change):
+  - A Google Cloud project with an **OAuth app** configured.
+  - The **Gmail API** enabled on that project.
+  - A **redirect URI** registered for the live URL.
+  - The `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and `APP_URL`
+    env vars set in **Vercel**.
+- **Two tiers of access:**
+  1. **Test-users mode** — works for a handful of manually-added Google accounts.
+     Sufficient for a **demo**.
+  2. **Full client use** — requires **Google app verification**: a weeks-long
+     security review that needs a published **privacy policy** and **homepage**.
+
+> The items under "Live connector execution" and "Agent sharing + embeddable
+> triggers" below depend on this connector work and are deferred along with it.
 
 ---
 
