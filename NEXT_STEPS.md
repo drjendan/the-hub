@@ -41,7 +41,7 @@ are the genuine backlog.
   return only a masked hint. An owner-only Settings page (`/settings`) validates a
   new key with a cheap provider test call before saving, and never returns or logs
   the key. Agent runs resolve the **tenant key first**, falling back to the
-  platform key. (Default Gemini model is now `gemini-2.0-flash`.)
+  platform key. (Default Gemini model is now `gemini-2.5-flash`.)
 
 ### Supporting infrastructure in place
 - **Gmail connect (read-only OAuth)** — per-user `connections` with encrypted

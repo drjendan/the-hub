@@ -34,7 +34,7 @@ export interface ProviderInfo {
 const DEFAULT_MODELS: Record<AIProvider, string> = {
   openai: "gpt-4o-mini",
   anthropic: "claude-3-5-haiku-latest",
-  google: "gemini-2.0-flash",
+  google: "gemini-2.5-flash",
 };
 
 const LABELS: Record<AIProvider, string> = {
