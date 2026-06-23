@@ -170,6 +170,16 @@ that **take action**:
   to build* (e.g. "Resume Screener"), each with a **"Build this"** action that
   opens the Builder pre-filled.
 
+### F. Home / Launch page (from the demo — Sean)
+No home page exists yet — only the dashboard. Sean wants a **distinct launch
+page**:
+- **Short explanation of the hub** plus **links out to all URLs** (SharePoint,
+  OneDrive, apps, Your Solutions Corner, etc.) — **"one URL to remember."**
+- **Distinguish the launch page from Hub Analytics** — revisit labeling; the
+  **"Workspace"** naming may also be revisited.
+- **Security: strong login on the launch page** — email/password **+ 2FA via SMS
+  code**; **content greyed-out until verification**.
+
 ### E. Audio/video recordings as agent input (future phase)
 - The generic run path now takes pasted text + uploaded **.txt/.md/PDF** (PDF text
   extracted server-side via `unpdf`). **Audio/video recordings** (meeting calls,
