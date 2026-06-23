@@ -1,10 +1,62 @@
 # Agent Hub — Next Steps / Roadmap
 
-_Last updated: 2026-06-21_
+_Last updated: 2026-06-23_
 
 This file reflects the **actual state of the code**, not just intentions. The
 core multi-tenant platform is built and working; the items under "Still ahead"
 are the genuine backlog.
+
+---
+
+## Client Demo & Direction (Sean/Ndala) — 2026-06-23
+
+First client demo of the hub to **Sean Reed-McGee** and **Ndala**. This section
+captures what was shown and the direction set; the prioritized decisions below
+supersede earlier sequencing where they conflict.
+
+### What was demoed (current state)
+- **Tenant structure** — **LeadVentures** is the parent account; each company is
+  its own workspace (D9 Network/Back2Learn, YourSolutionsCorner, FocusQuest,
+  FocusQuest Publishing). Agents scope to **one company, all, or select
+  companies** within a tenant.
+- **Demo agent** — a **Level 1 Meeting Minutes** agent: extracts title,
+  participants, and next steps; accepts **pasted text or PDF/TXT/MD upload**;
+  returned **95% confidence** with **no hallucinations flagged**.
+- **Provider** — running on **Gemini**, currently via **Danielle's personal
+  funded Gemini key**; all usage routes through her key (**to be changed** — see
+  decisions 1–2).
+- **Governance space** — policies (an **ethics policy** is drafted), best
+  practices, and compliance packs (**GDPR / banking**); demonstrated unethical
+  content getting flagged. Intended as the **single source of truth** — the
+  "living organism."
+- **Analytics** — confidence scoring, hallucination rate, risk indicators.
+- **Sessions** — audit log of who uses each agent; supports **sunsetting** unused
+  agents.
+- **Approval workflow** — anyone can build; agents move **draft → in review →
+  published**.
+
+### Decisions / direction from Sean (prioritize these)
+1. **Multi-provider choice per account** — surface/activate **BYOK** so each
+   account picks its provider (**Gemini, Claude, ChatGPT**) and uses its **own
+   key**, instead of Gemini-only. _(BYOK plumbing already exists — see
+   `org_provider_keys` / `/settings`; this is about surfacing provider choice and
+   moving every account onto its own key.)_
+2. **Corporate billing + spend monitoring** — move API billing to a **corporate
+   account / corporate card**, and add **spend monitoring**, since today all
+   calls hit one account.
+3. **Separate personal from corporate knowledge** — keep personal Claude /
+   business knowledge out of the corporate hub; **enforce via a governance
+   policy** that only **business-professional** material may be used.
+4. **Duplication is acceptable for now** — do **NOT** build partial-duplicate
+   detection yet.
+5. **Keep the logo concept** (circle / connection points); **font TBD**.
+6. **Connectors are Level 2** — get **Level 1 production-clean first**.
+
+### Open item — agent migration
+- Need an **easy way to move agents built on personal computers** into the hub
+  (e.g., **Mariano's financials agent**).
+- **Ndala proposed** a **prompt library with a consistent naming convention** as
+  standard process; **all future updates done in the hub only**.
 
 ---
 
